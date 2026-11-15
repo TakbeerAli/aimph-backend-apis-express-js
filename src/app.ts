@@ -3,6 +3,8 @@ import cors from 'cors';
 import express, { type Express } from 'express';
 import helmet from 'helmet';
 import { pinoHttp } from 'pino-http';
+import swaggerUi from 'swagger-ui-express';
+import { buildOpenApiDocument } from './docs/openapi.js';
 import { env } from './config/env.js';
 import { logger } from './common/logger.js';
 import { requireAuth } from './common/middleware/auth.js';
@@ -27,6 +29,9 @@ export function createApp(): Express {
   const app = express();
 
   app.disable('x-powered-by');
+  // Behind a host's proxy (Render, Railway, nginx) req.ip must come from X-Forwarded-For,
+  // or rate limits would treat every user as one IP.
+  app.set('trust proxy', env.TRUST_PROXY);
   app.use(helmet());
   app.use(
     cors({
@@ -67,6 +72,13 @@ export function createApp(): Express {
   api.use('/reports', ...authed, reportsRouter);
   api.use('/sync', ...authed, syncRouter);
   app.use('/api/v1', api);
+
+  // API docs, generated from the same Zod schemas the routes use.
+  const openApi = buildOpenApiDocument();
+  app.get('/docs/openapi.json', (_req, res) => {
+    res.json(openApi);
+  });
+  app.use('/docs', swaggerUi.serve, swaggerUi.setup(openApi, { customSiteTitle: 'Al-Mahdi API' }));
 
   app.use(notFound);
   app.use(errorHandler);

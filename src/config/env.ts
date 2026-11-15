@@ -36,6 +36,8 @@ const envSchema = z
           .filter(Boolean),
       ),
     TZ_BUSINESS: z.string().refine(isValidTimeZone, 'Must be a valid IANA time zone'),
+    /** Number of proxies in front of the app (1 on Render/Railway). 0 when run directly. */
+    TRUST_PROXY: z.coerce.number().int().min(0).max(5).default(0),
   })
   .superRefine((env, ctx) => {
     if (env.JWT_ACCESS_SECRET === env.JWT_REFRESH_SECRET) {

@@ -3,3 +3,5 @@ dist/
 coverage/
 .env
 *.log
+# Local MongoDB data (npm run db)
+.data/
