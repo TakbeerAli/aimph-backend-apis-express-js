@@ -10,8 +10,11 @@ import { errorHandler } from './common/middleware/errorHandler.js';
 import { notFound } from './common/middleware/notFound.js';
 import { createApiLimiter, createLoginLimiter } from './common/middleware/rateLimit.js';
 import { createAuthRouter } from './modules/auth/auth.routes.js';
+import { classesRouter } from './modules/classes/classes.routes.js';
 import { healthRouter } from './modules/health/health.routes.js';
+import { sessionsRouter } from './modules/sessions/sessions.routes.js';
 import { settingsRouter } from './modules/settings/settings.routes.js';
+import { studentsRouter } from './modules/students/students.routes.js';
 import { usersRouter } from './modules/users/users.routes.js';
 
 export function createApp(): Express {
@@ -48,6 +51,9 @@ export function createApp(): Express {
   api.use('/auth', createAuthRouter({ login: createLoginLimiter(), api: apiLimiter }));
   api.use('/users', ...authed, usersRouter);
   api.use('/settings', ...authed, settingsRouter);
+  api.use('/sessions', ...authed, sessionsRouter);
+  api.use('/classes', ...authed, classesRouter);
+  api.use('/students', ...authed, studentsRouter);
   app.use('/api/v1', api);
 
   app.use(notFound);

@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { resetDatabase } from '../../test/helpers.js';
 import { AuditLog, writeAudit } from '../common/audit.js';
 import { SETTINGS_ID } from './counters.js';
-import { syncPlugin, type SyncFields } from './syncPlugin.js';
+import { insertManySynced, syncPlugin, type SyncFields } from './syncPlugin.js';
 import { withTransaction } from './transaction.js';
 
 interface ItemAttrs extends SyncFields {
@@ -74,17 +74,28 @@ describe('syncPlugin', () => {
     expect(after.syncSeq).toBe(item.syncSeq + 2);
   });
 
-  it('gives each insertMany document its own increasing syncSeq', async () => {
-    const docs = await Item.insertMany([
-      { _id: 'a', name: 'A' },
-      { _id: 'b', name: 'B' },
-      { _id: 'c', name: 'C' },
-    ]);
+  it('insertManySynced gives each document its own increasing syncSeq, in the transaction', async () => {
+    const docs = await withTransaction((session) =>
+      insertManySynced(
+        Item,
+        [
+          { _id: 'a', name: 'A' },
+          { _id: 'b', name: 'B' },
+          { _id: 'c', name: 'C' },
+        ],
+        session,
+      ),
+    );
     const seqs = docs.map((d) => d.syncSeq);
 
     expect(seqs[1]).toBe((seqs[0] ?? 0) + 1);
     expect(seqs[2]).toBe((seqs[0] ?? 0) + 2);
     expect(docs.every((d) => d.version === 1)).toBe(true);
+  });
+
+  it('refuses a plain insertMany, which could not take part in the transaction', async () => {
+    await expect(Item.insertMany([{ _id: 'a', name: 'A' }])).rejects.toThrow(/insertManySynced/);
+    expect(await Item.countDocuments()).toBe(0);
   });
 
   it('refuses updateMany, which would give many documents the same syncSeq', async () => {

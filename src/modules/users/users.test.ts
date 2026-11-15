@@ -1,6 +1,7 @@
 import request from 'supertest';
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
+  asAuthUser,
   bearer,
   createUser,
   login,
@@ -10,6 +11,7 @@ import {
 } from '../../../test/helpers.js';
 import { createApp } from '../../app.js';
 import { AuditLog } from '../../common/audit.js';
+import { createClass } from '../classes/classes.service.js';
 import type { UserDoc } from './users.model.js';
 
 const api = '/api/v1/users';
@@ -48,6 +50,20 @@ describe('users (Admin)', () => {
   });
 
   it('creates a Staff user who can then log in', async () => {
+    const c1 = await createClass(asAuthUser(admin), {
+      name: 'Class 1',
+      shortName: null,
+      sortOrder: 4,
+      nextClassId: null,
+      sections: [],
+    });
+    const c2 = await createClass(asAuthUser(admin), {
+      name: 'Class 2',
+      shortName: null,
+      sortOrder: 5,
+      nextClassId: null,
+      sections: [],
+    });
     const res = await request(app)
       .post(api)
       .set('Authorization', bearer(adminTokens))
@@ -56,7 +72,7 @@ describe('users (Admin)', () => {
         username: 'Staff2',
         password: 'staff2-password',
         deviceCode: 's2',
-        assignedClassIds: ['c1', 'c1', 'c2'],
+        assignedClassIds: [c1._id, c1._id, c2._id],
         role: 'ADMIN', // ignored: only Staff can be created here
       });
 
@@ -65,7 +81,7 @@ describe('users (Admin)', () => {
       username: 'staff2',
       deviceCode: 'S2',
       role: 'STAFF',
-      assignedClassIds: ['c1', 'c2'],
+      assignedClassIds: [c1._id, c2._id],
       version: 1,
       createdBy: admin._id,
     });
@@ -73,6 +89,14 @@ describe('users (Admin)', () => {
       login(app, { username: 'staff2', deviceCode: 'S2' }, 'staff2-password'),
     ).resolves.toBeTruthy();
     expect(await AuditLog.countDocuments({ action: 'USER_CREATE' })).toBe(1);
+  });
+
+  it('rejects assigned classes that do not exist', async () => {
+    const res = await request(app)
+      .patch(`${api}/${staff._id}`)
+      .set('Authorization', bearer(adminTokens))
+      .send({ assignedClassIds: ['no-such-class'] });
+    expect(res.status).toBe(400);
   });
 
   it('rejects a duplicate username or device code with CONFLICT', async () => {

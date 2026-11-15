@@ -10,6 +10,7 @@ import {
 } from '../../common/utils/pagination.js';
 import { withTransaction } from '../../db/transaction.js';
 import { hashPassword } from '../auth/password.js';
+import { assertClassesExist } from '../classes/classes.service.js';
 import { User, type UserDoc } from './users.model.js';
 import type { CreateUserInput, ListUsersQuery, UpdateUserInput } from './users.schemas.js';
 
@@ -31,6 +32,7 @@ export async function listUsers(query: ListUsersQuery): Promise<PageResult<UserD
 export async function createStaff(admin: AuthUser, input: CreateUserInput): Promise<UserDoc> {
   const passwordHash = await hashPassword(input.password);
   return withTransaction(async (session) => {
+    await assertClassesExist(input.assignedClassIds, session);
     const [user] = await User.create(
       [
         {
@@ -73,6 +75,7 @@ export async function updateUser(
   }
   return withTransaction(async (session) => {
     const user = await findUserOrThrow(id, session);
+    if (input.assignedClassIds) await assertClassesExist(input.assignedClassIds, session);
     const before = {
       fullName: user.fullName,
       isActive: user.isActive,

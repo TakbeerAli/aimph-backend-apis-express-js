@@ -1,7 +1,12 @@
 import type { Express } from 'express';
 import mongoose from 'mongoose';
 import request from 'supertest';
+import type { AuthUser } from '../src/common/middleware/auth.js';
 import { hashPassword } from '../src/modules/auth/password.js';
+import { createClass } from '../src/modules/classes/classes.service.js';
+import { createSession } from '../src/modules/sessions/sessions.service.js';
+import { admitStudentBody } from '../src/modules/students/students.schemas.js';
+import { admitStudent } from '../src/modules/students/students.service.js';
 import { ensureSettings } from '../src/modules/settings/settings.service.js';
 import { User, type Role, type UserDoc } from '../src/modules/users/users.model.js';
 
@@ -62,3 +67,78 @@ export async function login(
 }
 
 export const bearer = (tokens: Tokens): string => `Bearer ${tokens.accessToken}`;
+
+export const asAuthUser = (user: UserDoc): AuthUser => ({
+  id: user._id,
+  username: user.username,
+  fullName: user.fullName,
+  role: user.role,
+  deviceCode: user.deviceCode,
+  assignedClassIds: user.assignedClassIds,
+});
+
+/**
+ * A small school: Admin, current session 2026-27, Class 5 (A, B) → Class 6 (A).
+ * Returns ids that tests use to build requests.
+ */
+export async function setupSchool() {
+  const admin = await createUser({ role: 'ADMIN' });
+  const actor = asAuthUser(admin);
+  const session = await createSession(actor, { name: '2026-27' });
+  const class6 = await createClass(actor, {
+    name: 'Class 6',
+    shortName: '6',
+    sortOrder: 9,
+    nextClassId: null,
+    sections: ['A'],
+  });
+  const class5 = await createClass(actor, {
+    name: 'Class 5',
+    shortName: '5',
+    sortOrder: 8,
+    nextClassId: class6._id,
+    sections: ['A', 'B'],
+  });
+  const sectionId = (cls: typeof class5, name: string) => {
+    const found = cls.sections.find((s) => s.name === name);
+    if (!found) throw new Error(`No section ${name}`);
+    return found._id;
+  };
+  return {
+    admin,
+    actor,
+    sessionId: session._id,
+    class5Id: class5._id,
+    class6Id: class6._id,
+    s5A: sectionId(class5, 'A'),
+    s5B: sectionId(class5, 'B'),
+    s6A: sectionId(class6, 'A'),
+  };
+}
+
+/** A valid admission body (raw JSON, as the app would send it). */
+export function studentBody(
+  placement: { classId: string; sectionId: string },
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return {
+    fullName: 'Ali Raza',
+    dateOfBirth: '2015-05-10',
+    gender: 'MALE',
+    admissionDate: '2026-04-05',
+    address: 'House 1, Street 2, Rawalpindi',
+    guardian: { fatherName: 'Ahmed Raza', relation: 'FATHER', phone: '0345-1112233' },
+    ...placement,
+    ...overrides,
+  };
+}
+
+/** Admits a student through the service (no HTTP). */
+export async function admit(
+  actor: AuthUser,
+  placement: { classId: string; sectionId: string },
+  overrides: Record<string, unknown> = {},
+) {
+  const input = admitStudentBody.parse(studentBody(placement, overrides));
+  return (await admitStudent(actor, input)).student;
+}

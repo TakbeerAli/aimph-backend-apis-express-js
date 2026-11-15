@@ -35,6 +35,20 @@ export async function incrementCounter(
   return path === 'counters.syncSeq' ? result.counters.syncSeq : result.counters.admissionNo;
 }
 
+/**
+ * Raises a counter to at least `value` (never lowers it). Used when the Admin phone created an
+ * admission number offline, so the next server number comes after it.
+ */
+export async function raiseCounterTo(
+  path: CounterPath,
+  value: number,
+  session?: ClientSession | null,
+): Promise<void> {
+  await mongoose.connection
+    .collection<SettingsCounters>('settings')
+    .updateOne({ _id: SETTINGS_ID }, { $max: { [path]: value } }, session ? { session } : {});
+}
+
 /** Reserves `count` consecutive syncSeq values and returns the first one. */
 export async function allocateSyncSeq(
   count: number,
