@@ -7,8 +7,10 @@ import {
   changeSectionBody,
   importStudentsBody,
   listStudentsQuery,
+  promoteBody,
   studentIdParams,
   updateStudentBody,
+  withdrawBody,
 } from './students.schemas.js';
 
 // Mounted behind requireAuth in app.ts. Staff can view; only Admin changes students.
@@ -23,6 +25,7 @@ studentsRouter.post(
   validate({ body: importStudentsBody }),
   controller.importMany,
 );
+studentsRouter.post('/promote', admin, validate({ body: promoteBody }), controller.promote);
 studentsRouter.get('/:id', validate({ params: studentIdParams }), controller.get);
 studentsRouter.get(
   '/:id/fee-history',
@@ -40,4 +43,10 @@ studentsRouter.post(
   admin,
   validate({ params: studentIdParams, body: changeSectionBody }),
   controller.changeSection,
+);
+studentsRouter.post(
+  '/:id/withdraw',
+  admin,
+  validate({ params: studentIdParams, body: withdrawBody }),
+  controller.withdraw,
 );

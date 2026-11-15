@@ -53,6 +53,51 @@ export async function createSession(
   });
 }
 
+/**
+ * Section 8.10: the old current session is CLOSED and the new one becomes current, in one
+ * transaction. Old unpaid vouchers stay as they are (previous-session dues).
+ */
+export async function setCurrentSession(user: AuthUser, id: string): Promise<AcademicSessionDoc> {
+  return withTransaction(async (session) => {
+    const target = await AcademicSession.findById(id).session(session);
+    if (!target) throw new AppError('NOT_FOUND', 'Session not found.');
+    if (target.isCurrent) throw new AppError('CONFLICT', `${target.name} is already current.`);
+    if (target.status === 'CLOSED') {
+      throw new AppError('VALIDATION_ERROR', `${target.name} is closed and cannot be reopened.`);
+    }
+
+    const old = await AcademicSession.findOne({ isCurrent: true }).session(session);
+    if (old && target.startDate <= old.startDate) {
+      throw new AppError(
+        'VALIDATION_ERROR',
+        `The new session must start after the current one (${old.name}).`,
+      );
+    }
+    // Unset the old one first: only one session may have isCurrent = true.
+    if (old) {
+      old.isCurrent = false;
+      old.status = 'CLOSED';
+      await old.save({ session });
+    }
+    target.isCurrent = true;
+    await target.save({ session });
+
+    const settings = await getSettings(session);
+    settings.currentSessionId = target._id;
+    await settings.save({ session });
+
+    await writeAudit(session, {
+      action: 'SESSION_SET_CURRENT',
+      userId: user.id,
+      entity: 'academic_session',
+      entityId: target._id,
+      before: { currentSession: old?.name ?? null },
+      after: { currentSession: target.name, closed: old?.name ?? null },
+    });
+    return target;
+  });
+}
+
 /** The current session, or a clear error if none has been created yet. */
 export async function requireCurrentSession(session?: ClientSession): Promise<AcademicSessionDoc> {
   const current = await AcademicSession.findOne({ isCurrent: true }).session(session ?? null);

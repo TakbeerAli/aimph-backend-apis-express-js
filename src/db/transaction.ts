@@ -8,6 +8,8 @@ import mongoose, { type ClientSession } from 'mongoose';
  * touch the database: no HTTP calls, logging of "done", or other side effects.
  * Load the documents you change *inside* `fn` (with the session), so a retry starts from
  * fresh copies instead of instances already changed by the aborted attempt.
+ * Run operations on the session one at a time (no Promise.all): MongoDB rejects parallel
+ * operations in one transaction ("ConflictingOperationInProgress").
  */
 export async function withTransaction<T>(fn: (session: ClientSession) => Promise<T>): Promise<T> {
   // Mongoose's helper also resets document state ($isNew, modified paths) if a retry happens.

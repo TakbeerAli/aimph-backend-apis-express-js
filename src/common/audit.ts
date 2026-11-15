@@ -11,6 +11,7 @@ export type AuditAction =
   | 'USER_SIGN_OUT'
   | 'SETTINGS_UPDATE'
   | 'SESSION_CREATE'
+  | 'SESSION_SET_CURRENT'
   | 'CLASS_CREATE'
   | 'CLASS_UPDATE'
   | 'SECTION_CREATE'

@@ -1,7 +1,13 @@
 import { z } from 'zod';
 import { dateOnlySchema, today } from '../../common/utils/dates.js';
 import { pageQuery } from '../../common/utils/pagination.js';
-import { GENDERS, RELATIONS, STUDENT_STATUSES } from './students.model.js';
+import {
+  DUES_ACTIONS,
+  GENDERS,
+  RELATIONS,
+  STUDENT_STATUSES,
+  WITHDRAWAL_REASONS,
+} from './students.model.js';
 
 const id = z.string().min(1).max(64);
 const phone = z
@@ -107,6 +113,41 @@ export const listStudentsQuery = pageQuery(
   status: z.enum(STUDENT_STATUSES).optional(),
 });
 
+export const withdrawBody = z
+  .object({
+    date: dateOnlySchema.optional(),
+    reason: z.enum(WITHDRAWAL_REASONS),
+    reasonNote: text(250).optional(),
+    duesAction: z.enum(DUES_ACTIONS),
+    /** Required when duesAction is WAIVED; written on each waiver. */
+    waiveReason: z.string().trim().min(3).max(200).optional(),
+  })
+  .refine((b) => b.duesAction !== 'WAIVED' || b.waiveReason, {
+    message: 'A reason is required to waive dues.',
+    path: ['waiveReason'],
+  })
+  .refine((b) => b.reason !== 'OTHER' || b.reasonNote, {
+    message: 'Please describe the reason.',
+    path: ['reasonNote'],
+  });
+
+export const promoteBody = z
+  .object({
+    fromSessionId: id,
+    toSessionId: id,
+    classId: id,
+    /** Promote only this section; all sections of the class when omitted. */
+    sectionId: id.optional(),
+    /** Section of the next class. Required unless the class is the last one (graduation). */
+    toSectionId: id.optional(),
+    /** Students who stay back in the same class (RETAINED). */
+    excludeStudentIds: z.array(id).max(500).default([]),
+  })
+  .refine((b) => b.fromSessionId !== b.toSessionId, {
+    message: 'Choose two different sessions.',
+    path: ['toSessionId'],
+  });
+
 /** Rows are validated one by one in the service, so each error can name its row. */
 export const importStudentsBody = z.array(z.unknown()).min(1).max(2000);
 
@@ -114,3 +155,5 @@ export type AdmitStudentInput = z.infer<typeof admitStudentBody>;
 export type UpdateStudentInput = z.infer<typeof updateStudentBody>;
 export type ChangeSectionInput = z.infer<typeof changeSectionBody>;
 export type ListStudentsQuery = z.infer<typeof listStudentsQuery>;
+export type WithdrawInput = z.infer<typeof withdrawBody>;
+export type PromoteInput = z.infer<typeof promoteBody>;

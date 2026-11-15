@@ -4,7 +4,10 @@ import request from 'supertest';
 import type { AuthUser } from '../src/common/middleware/auth.js';
 import { hashPassword } from '../src/modules/auth/password.js';
 import { createClass } from '../src/modules/classes/classes.service.js';
+import { newId } from '../src/common/utils/ids.js';
 import { putFeeStructure } from '../src/modules/fee-structures/fee-structures.service.js';
+import { createPaymentBody } from '../src/modules/payments/payments.schemas.js';
+import { createPayment } from '../src/modules/payments/payments.service.js';
 import { createSession } from '../src/modules/sessions/sessions.service.js';
 import { admitStudentBody } from '../src/modules/students/students.schemas.js';
 import { admitStudent } from '../src/modules/students/students.service.js';
@@ -143,6 +146,44 @@ export function studentBody(
     ...placement,
     ...overrides,
   };
+}
+
+/**
+ * Collects a payment through the service, as `actor` on their own device.
+ * `seq` is the device's receipt sequence number.
+ */
+export async function collect(
+  actor: AuthUser,
+  seq: number,
+  studentId: string,
+  allocations: { voucherId: string; amount: number }[],
+  overrides: Record<string, unknown> = {},
+) {
+  const amount = allocations.reduce((sum, a) => sum + a.amount, 0);
+  const input = createPaymentBody.parse({
+    _id: newId(),
+    receiptNo: `R-${actor.deviceCode}-${String(seq).padStart(5, '0')}`,
+    receiptSeq: seq,
+    studentId,
+    amount,
+    method: 'CASH',
+    paidAt: new Date().toISOString(),
+    allocations,
+    receiptSnapshot: {
+      studentName: 'Test Student',
+      fatherName: 'Test Father',
+      admissionNo: 1001,
+      className: '5-A',
+      months: [],
+      previousBalance: 0,
+      currentFee: amount,
+      fine: 0,
+      amountPaid: amount,
+      remainingBalance: 0,
+    },
+    ...overrides,
+  });
+  return createPayment(actor, input);
 }
 
 /** Admits a student through the service (no HTTP). */

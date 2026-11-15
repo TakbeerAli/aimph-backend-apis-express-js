@@ -75,10 +75,13 @@ export async function copyFeeStructures(
     await assertSessionExists(input.fromSessionId, session);
     await assertSessionExists(input.toSessionId, session);
 
-    const [source, existing] = await Promise.all([
-      FeeStructure.find({ sessionId: input.fromSessionId }).session(session).lean(),
-      FeeStructure.find({ sessionId: input.toSessionId }, { classId: 1 }).session(session).lean(),
-    ]);
+    // One at a time: a transaction session cannot run operations in parallel.
+    const source = await FeeStructure.find({ sessionId: input.fromSessionId })
+      .session(session)
+      .lean();
+    const existing = await FeeStructure.find({ sessionId: input.toSessionId }, { classId: 1 })
+      .session(session)
+      .lean();
     const alreadySet = new Set(existing.map((s) => s.classId));
     const toCreate = source
       .filter((s) => !alreadySet.has(s.classId))

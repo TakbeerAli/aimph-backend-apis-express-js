@@ -2,11 +2,14 @@ import type { Request, Response } from 'express';
 import { authUser } from '../../common/middleware/auth.js';
 import { sendData } from '../../common/respond.js';
 import { studentFeeHistory } from '../payments/payments.service.js';
+import { promoteClass, withdrawStudent } from './students.lifecycle.js';
 import type {
   AdmitStudentInput,
   ChangeSectionInput,
   ListStudentsQuery,
+  PromoteInput,
   UpdateStudentInput,
+  WithdrawInput,
 } from './students.schemas.js';
 import * as studentsService from './students.service.js';
 
@@ -18,6 +21,15 @@ export async function list(req: Request, res: Response): Promise<void> {
 
 export async function get(req: Request<IdParams>, res: Response): Promise<void> {
   sendData(res, await studentsService.getStudent(req.params.id));
+}
+
+export async function withdraw(req: Request<IdParams>, res: Response): Promise<void> {
+  const body = req.body as WithdrawInput;
+  sendData(res, await withdrawStudent(authUser(req), req.params.id, body));
+}
+
+export async function promote(req: Request, res: Response): Promise<void> {
+  sendData(res, await promoteClass(authUser(req), req.body as PromoteInput));
 }
 
 export async function feeHistory(req: Request<IdParams>, res: Response): Promise<void> {
