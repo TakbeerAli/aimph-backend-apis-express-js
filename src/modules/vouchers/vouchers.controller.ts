@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 import { authUser } from '../../common/middleware/auth.js';
 import { sendData } from '../../common/respond.js';
+import { paymentsForVoucher } from '../payments/payments.service.js';
 import * as generation from './vouchers.generate.js';
 import type {
   CancelInput,
@@ -27,8 +28,11 @@ export async function list(req: Request, res: Response): Promise<void> {
   sendData(res, await vouchersService.listVouchers(req.query as unknown as ListVouchersQuery));
 }
 
+/** The voucher plus the payments applied to it (Staff: see paymentsForVoucher). */
 export async function get(req: Request<IdParams>, res: Response): Promise<void> {
-  sendData(res, await vouchersService.getVoucher(req.params.id));
+  const voucher = await vouchersService.getVoucher(req.params.id);
+  const payments = await paymentsForVoucher(authUser(req), voucher);
+  sendData(res, { ...voucher.toJSON(), payments });
 }
 
 export async function getByNo(req: Request<{ voucherNo: string }>, res: Response): Promise<void> {

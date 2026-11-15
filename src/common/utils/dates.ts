@@ -54,6 +54,32 @@ export const feeMonthSchema = z
   .string()
   .regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Use the format YYYY-MM, e.g. 2026-12.');
 
+const offsetFormatter = new Intl.DateTimeFormat('en-US', {
+  timeZone: env.TZ_BUSINESS,
+  timeZoneName: 'longOffset',
+});
+
+/** The school time zone's UTC offset at an instant, in ms ("GMT+05:00" → 5h). */
+function businessOffsetMs(at: Date): number {
+  const name = offsetFormatter.formatToParts(at).find((p) => p.type === 'timeZoneName')?.value;
+  const match = /GMT([+-])(\d{2}):?(\d{2})?/.exec(name ?? '');
+  if (!match) return 0; // "GMT" means UTC
+  const minutes = Number(match[2]) * 60 + Number(match[3] ?? 0);
+  return (match[1] === '-' ? -1 : 1) * minutes * 60_000;
+}
+
+/** The instant a business day starts: "2026-11-20" → 2026-11-19T19:00:00Z in Karachi. */
+export function businessDayStart(ymd: string): Date {
+  const utcMidnight = dateOnly(ymd);
+  return new Date(utcMidnight.getTime() - businessOffsetMs(utcMidnight));
+}
+
+/** The instant the next business day starts (exclusive end of `ymd`). */
+export function businessDayEnd(ymd: string): Date {
+  const next = new Date(dateOnly(ymd).getTime() + 86_400_000);
+  return businessDayStart(toYmd(next));
+}
+
 /** Session "2026-27" → 1 Apr 2026 to 31 Mar 2027. */
 export function sessionDates(name: string): { startDate: Date; endDate: Date } {
   const startYear = Number(name.slice(0, 4));

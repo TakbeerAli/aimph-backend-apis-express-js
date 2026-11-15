@@ -24,6 +24,11 @@ studentsRouter.post(
   controller.importMany,
 );
 studentsRouter.get('/:id', validate({ params: studentIdParams }), controller.get);
+studentsRouter.get(
+  '/:id/fee-history',
+  validate({ params: studentIdParams }),
+  controller.feeHistory,
+);
 studentsRouter.patch(
   '/:id',
   admin,

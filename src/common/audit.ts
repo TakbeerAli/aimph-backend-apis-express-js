@@ -23,6 +23,7 @@ export type AuditAction =
   | 'CLASS_PROMOTE'
   | 'PAYMENT_CREATE'
   | 'PAYMENT_REVERSE'
+  | 'PAYMENT_RESOLVE'
   | 'FINE_ADD'
   | 'DUES_WAIVE'
   | 'VOUCHER_CANCEL'

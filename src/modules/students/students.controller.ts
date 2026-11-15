@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 import { authUser } from '../../common/middleware/auth.js';
 import { sendData } from '../../common/respond.js';
+import { studentFeeHistory } from '../payments/payments.service.js';
 import type {
   AdmitStudentInput,
   ChangeSectionInput,
@@ -17,6 +18,10 @@ export async function list(req: Request, res: Response): Promise<void> {
 
 export async function get(req: Request<IdParams>, res: Response): Promise<void> {
   sendData(res, await studentsService.getStudent(req.params.id));
+}
+
+export async function feeHistory(req: Request<IdParams>, res: Response): Promise<void> {
+  sendData(res, await studentFeeHistory(authUser(req), req.params.id));
 }
 
 export async function admit(req: Request, res: Response): Promise<void> {
