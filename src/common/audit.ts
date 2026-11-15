@@ -27,6 +27,7 @@ export type AuditAction =
   | 'DUES_WAIVE'
   | 'VOUCHER_CANCEL'
   | 'VOUCHERS_GENERATE'
+  | 'OPENING_BALANCES_CREATE'
   | 'FEE_STRUCTURE_UPDATE';
 
 export interface AuditEntry {

@@ -37,6 +37,23 @@ export const dateOnlySchema = z
   .union([z.iso.date(), z.iso.datetime()])
   .transform((value) => dateOnly(value));
 
+/** "2026-12" + 1 → "2027-01". */
+export function addMonths(feeMonth: string, count: number): string {
+  const index = Number(feeMonth.slice(0, 4)) * 12 + Number(feeMonth.slice(5, 7)) - 1 + count;
+  return `${Math.floor(index / 12)}-${String((index % 12) + 1).padStart(2, '0')}`;
+}
+
+/** Day `day` of a fee month as a date-only value. */
+export const dayOfMonth = (feeMonth: string, day: number): Date =>
+  dateOnly(`${feeMonth}-${String(day).padStart(2, '0')}`);
+
+/** Date-only value → its fee month "YYYY-MM". */
+export const monthOf = (date: Date): string => toYmd(date).slice(0, 7);
+
+export const feeMonthSchema = z
+  .string()
+  .regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Use the format YYYY-MM, e.g. 2026-12.');
+
 /** Session "2026-27" → 1 Apr 2026 to 31 Mar 2027. */
 export function sessionDates(name: string): { startDate: Date; endDate: Date } {
   const startYear = Number(name.slice(0, 4));

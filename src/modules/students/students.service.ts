@@ -3,18 +3,16 @@ import { diffFields, writeAudit } from '../../common/audit.js';
 import { AppError } from '../../common/errors.js';
 import type { AuthUser } from '../../common/middleware/auth.js';
 import { today } from '../../common/utils/dates.js';
-import {
-  pageResult,
-  skipFor,
-  toMongoSort,
-  type PageResult,
-} from '../../common/utils/pagination.js';
+import { pageResult, skipFor, toMongoSort } from '../../common/utils/pagination.js';
 import { incrementCounter, raiseCounterTo } from '../../db/counters.js';
 import { insertManySynced } from '../../db/syncPlugin.js';
 import { withTransaction } from '../../db/transaction.js';
 import { SchoolClass } from '../classes/classes.model.js';
 import { requireActivePlacement } from '../classes/classes.service.js';
+import { AcademicSession } from '../sessions/sessions.model.js';
 import { requireCurrentSession } from '../sessions/sessions.service.js';
+import { createAdmissionVoucher } from '../vouchers/vouchers.generate.js';
+import { OPEN_BALANCE, Voucher, type VoucherDoc } from '../vouchers/vouchers.model.js';
 import { Student, type StudentAttrs, type StudentDoc } from './students.model.js';
 import {
   admitStudentBody,
@@ -79,15 +77,20 @@ async function assignAdmissionNo(given: number | undefined, session: ClientSessi
 
 export interface AdmitResult {
   student: StudentDoc;
+  /** The admission voucher (current month: tuition + admission fee), if one was charged. */
+  voucher: VoucherDoc | null;
   /** True when a student with this `_id` already existed (repeat of an offline admission). */
   duplicate: boolean;
 }
 
-/** Section 8.1 (fee charging is added in Stage 4). */
+/** Section 8.1: student + first class-history entry + admission voucher, in one transaction. */
 export async function admitStudent(user: AuthUser, input: AdmitStudentInput): Promise<AdmitResult> {
   if (input._id) {
     const existing = await Student.findById(input._id);
-    if (existing) return { student: existing, duplicate: true };
+    if (existing) {
+      const voucher = await Voucher.findOne({ studentId: existing._id, 'lines.code': 'ADMISSION' });
+      return { student: existing, voucher, duplicate: true };
+    }
   }
 
   return withTransaction(async (session) => {
@@ -100,6 +103,7 @@ export async function admitStudent(user: AuthUser, input: AdmitStudentInput): Pr
       { session },
     );
     if (!student) throw new Error('Student was not created');
+    const voucher = await createAdmissionVoucher(user, student, currentSession, session);
 
     await writeAudit(session, {
       action: 'STUDENT_CREATE',
@@ -107,13 +111,20 @@ export async function admitStudent(user: AuthUser, input: AdmitStudentInput): Pr
       deviceCode: user.deviceCode,
       entity: 'student',
       entityId: student._id,
-      after: { admissionNo, fullName: student.fullName, current: student.current },
+      after: {
+        admissionNo,
+        fullName: student.fullName,
+        current: student.current,
+        voucherNo: voucher?.voucherNo ?? null,
+        charged: voucher?.totalAmount ?? 0,
+      },
     });
-    return { student, duplicate: false };
+    return { student, voucher, duplicate: false };
   });
 }
 
-export async function listStudents(query: ListStudentsQuery): Promise<PageResult<StudentDoc>> {
+/** Students matching the filters; each has `currentDues` (owed on this session's vouchers). */
+export async function listStudents(query: ListStudentsQuery) {
   const filter: QueryFilter<StudentAttrs> = {};
   if (query.status) filter.status = query.status;
   if (query.classId) filter['current.classId'] = query.classId;
@@ -124,10 +135,29 @@ export async function listStudents(query: ListStudentsQuery): Promise<PageResult
     filter.$and = words.map((w) => ({ searchText: { $regex: escapeRegex(w) } }));
   }
 
-  const [items, total] = await Promise.all([
+  const [students, total, currentSession] = await Promise.all([
     Student.find(filter).sort(toMongoSort(query.sort)).skip(skipFor(query)).limit(query.limit),
     Student.countDocuments(filter),
+    AcademicSession.findOne({ isCurrent: true }, { _id: 1 }).lean(),
   ]);
+
+  const dues = currentSession
+    ? await Voucher.aggregate<{ _id: string; amount: number }>([
+        {
+          $match: {
+            ...OPEN_BALANCE,
+            sessionId: currentSession._id,
+            studentId: { $in: students.map((s) => s._id) },
+          },
+        },
+        { $group: { _id: '$studentId', amount: { $sum: '$balance' } } },
+      ])
+    : [];
+  const duesByStudent = new Map(dues.map((d) => [d._id, d.amount]));
+  const items = students.map((s) => ({
+    ...s.toJSON(),
+    currentDues: duesByStudent.get(s._id) ?? 0,
+  }));
   return pageResult(items, total, query);
 }
 

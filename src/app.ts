@@ -15,6 +15,8 @@ import { healthRouter } from './modules/health/health.routes.js';
 import { sessionsRouter } from './modules/sessions/sessions.routes.js';
 import { settingsRouter } from './modules/settings/settings.routes.js';
 import { studentsRouter } from './modules/students/students.routes.js';
+import { feeStructuresRouter } from './modules/fee-structures/fee-structures.routes.js';
+import { vouchersRouter } from './modules/vouchers/vouchers.routes.js';
 import { usersRouter } from './modules/users/users.routes.js';
 
 export function createApp(): Express {
@@ -54,6 +56,8 @@ export function createApp(): Express {
   api.use('/sessions', ...authed, sessionsRouter);
   api.use('/classes', ...authed, classesRouter);
   api.use('/students', ...authed, studentsRouter);
+  api.use('/fee-structures', ...authed, feeStructuresRouter);
+  api.use('/vouchers', ...authed, vouchersRouter);
   app.use('/api/v1', api);
 
   app.use(notFound);

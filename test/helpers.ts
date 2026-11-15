@@ -4,6 +4,7 @@ import request from 'supertest';
 import type { AuthUser } from '../src/common/middleware/auth.js';
 import { hashPassword } from '../src/modules/auth/password.js';
 import { createClass } from '../src/modules/classes/classes.service.js';
+import { putFeeStructure } from '../src/modules/fee-structures/fee-structures.service.js';
 import { createSession } from '../src/modules/sessions/sessions.service.js';
 import { admitStudentBody } from '../src/modules/students/students.schemas.js';
 import { admitStudent } from '../src/modules/students/students.service.js';
@@ -78,7 +79,8 @@ export const asAuthUser = (user: UserDoc): AuthUser => ({
 });
 
 /**
- * A small school: Admin, current session 2026-27, Class 5 (A, B) → Class 6 (A).
+ * A small school: Admin, current session 2026-27, Class 5 (A, B) → Class 6 (A), with fee
+ * structures (Class 5: tuition 2500 / admission 5000 / exam 500; Class 6: 3000 / 5000 / 500).
  * Returns ids that tests use to build requests.
  */
 export async function setupSchool() {
@@ -98,6 +100,16 @@ export async function setupSchool() {
     sortOrder: 8,
     nextClassId: class6._id,
     sections: ['A', 'B'],
+  });
+  await putFeeStructure(actor, session._id, class5._id, {
+    tuitionFee: 2500,
+    admissionFee: 5000,
+    examFee: 500,
+  });
+  await putFeeStructure(actor, session._id, class6._id, {
+    tuitionFee: 3000,
+    admissionFee: 5000,
+    examFee: 500,
   });
   const sectionId = (cls: typeof class5, name: string) => {
     const found = cls.sections.find((s) => s.name === name);
