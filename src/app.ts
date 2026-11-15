@@ -18,6 +18,8 @@ import { studentsRouter } from './modules/students/students.routes.js';
 import { feeStructuresRouter } from './modules/fee-structures/fee-structures.routes.js';
 import { vouchersRouter } from './modules/vouchers/vouchers.routes.js';
 import { paymentsRouter } from './modules/payments/payments.routes.js';
+import { dashboardRouter } from './modules/dashboard/dashboard.routes.js';
+import { reportsRouter } from './modules/reports/reports.routes.js';
 import { usersRouter } from './modules/users/users.routes.js';
 
 export function createApp(): Express {
@@ -60,6 +62,8 @@ export function createApp(): Express {
   api.use('/fee-structures', ...authed, feeStructuresRouter);
   api.use('/vouchers', ...authed, vouchersRouter);
   api.use('/payments', ...authed, paymentsRouter);
+  api.use('/dashboard', ...authed, dashboardRouter);
+  api.use('/reports', ...authed, reportsRouter);
   app.use('/api/v1', api);
 
   app.use(notFound);

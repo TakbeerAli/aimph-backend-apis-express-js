@@ -7,7 +7,7 @@ import { createClass } from '../src/modules/classes/classes.service.js';
 import { newId } from '../src/common/utils/ids.js';
 import { putFeeStructure } from '../src/modules/fee-structures/fee-structures.service.js';
 import { createPaymentBody } from '../src/modules/payments/payments.schemas.js';
-import { createPayment } from '../src/modules/payments/payments.service.js';
+import { createPayment, type PaymentMode } from '../src/modules/payments/payments.service.js';
 import { createSession } from '../src/modules/sessions/sessions.service.js';
 import { admitStudentBody } from '../src/modules/students/students.schemas.js';
 import { admitStudent } from '../src/modules/students/students.service.js';
@@ -158,6 +158,7 @@ export async function collect(
   studentId: string,
   allocations: { voucherId: string; amount: number }[],
   overrides: Record<string, unknown> = {},
+  mode: PaymentMode = 'ONLINE',
 ) {
   const amount = allocations.reduce((sum, a) => sum + a.amount, 0);
   const input = createPaymentBody.parse({
@@ -183,7 +184,7 @@ export async function collect(
     },
     ...overrides,
   });
-  return createPayment(actor, input);
+  return createPayment(actor, input, mode);
 }
 
 /** Admits a student through the service (no HTTP). */
