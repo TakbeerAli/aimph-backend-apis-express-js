@@ -22,6 +22,7 @@ import { vouchersRouter } from './modules/vouchers/vouchers.routes.js';
 import { paymentsRouter } from './modules/payments/payments.routes.js';
 import { dashboardRouter } from './modules/dashboard/dashboard.routes.js';
 import { reportsRouter } from './modules/reports/reports.routes.js';
+import { setupRouter } from './modules/setup/setup.routes.js';
 import { syncRouter } from './modules/sync/sync.routes.js';
 import { usersRouter } from './modules/users/users.routes.js';
 
@@ -71,6 +72,7 @@ export function createApp(): Express {
   api.use('/dashboard', ...authed, dashboardRouter);
   api.use('/reports', ...authed, reportsRouter);
   api.use('/sync', ...authed, syncRouter);
+  api.use('/setup', ...authed, setupRouter);
   app.use('/api/v1', api);
 
   // API docs, generated from the same Zod schemas the routes use.

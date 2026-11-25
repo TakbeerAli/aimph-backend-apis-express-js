@@ -10,6 +10,7 @@ import {
 } from '../../common/utils/pagination.js';
 import { withTransaction } from '../../db/transaction.js';
 import { hashPassword } from '../auth/password.js';
+import { SchoolClass } from '../classes/classes.model.js';
 import { assertClassesExist } from '../classes/classes.service.js';
 import { User, type UserDoc } from './users.model.js';
 import type { CreateUserInput, ListUsersQuery, UpdateUserInput } from './users.schemas.js';
@@ -28,11 +29,42 @@ export async function listUsers(query: ListUsersQuery): Promise<PageResult<UserD
   return pageResult(items, total, query);
 }
 
+/**
+ * A class belongs to at most one Staff user, so two phones never collect for the same class.
+ * Throws CONFLICT naming the class and its current owner.
+ */
+async function assertClassesFree(
+  classIds: string[],
+  exceptUserId: string | null,
+  session: ClientSession,
+): Promise<void> {
+  if (classIds.length === 0) return;
+  const owners = await User.find(
+    {
+      role: 'STAFF',
+      isActive: true,
+      assignedClassIds: { $in: classIds },
+      ...(exceptUserId && { _id: { $ne: exceptUserId } }),
+    },
+    { fullName: 1, assignedClassIds: 1 },
+  ).session(session);
+  const owner = owners[0];
+  if (!owner) return;
+  const takenId = classIds.find((id) => owner.assignedClassIds.includes(id));
+  const cls = await SchoolClass.findById(takenId, { name: 1 }).session(session);
+  throw new AppError(
+    'CONFLICT',
+    `${cls?.name ?? 'A class'} is already assigned to ${owner.fullName}. A class can belong to only one staff member.`,
+    { classId: takenId, userId: owner._id },
+  );
+}
+
 /** Admin creates a Staff user. The single Admin is created with scripts/create-admin.ts. */
 export async function createStaff(admin: AuthUser, input: CreateUserInput): Promise<UserDoc> {
   const passwordHash = await hashPassword(input.password);
   return withTransaction(async (session) => {
     await assertClassesExist(input.assignedClassIds, session);
+    await assertClassesFree(input.assignedClassIds, null, session);
     const [user] = await User.create(
       [
         {
@@ -41,7 +73,10 @@ export async function createStaff(admin: AuthUser, input: CreateUserInput): Prom
           passwordHash,
           role: 'STAFF',
           deviceCode: input.deviceCode,
+          phone: input.phone ?? null,
           assignedClassIds: input.assignedClassIds,
+          // The Admin chose this password, so the staff member replaces it at first sign-in.
+          mustChangePassword: true,
           createdBy: admin.id,
         },
       ],
@@ -75,10 +110,18 @@ export async function updateUser(
   }
   return withTransaction(async (session) => {
     const user = await findUserOrThrow(id, session);
-    if (input.assignedClassIds) await assertClassesExist(input.assignedClassIds, session);
+    if (input.assignedClassIds) {
+      await assertClassesExist(input.assignedClassIds, session);
+      if (user.role === 'STAFF') await assertClassesFree(input.assignedClassIds, user._id, session);
+    }
+    // Turning a Staff user back on must not give two people the same class.
+    if (input.isActive === true && !user.isActive && user.role === 'STAFF') {
+      await assertClassesFree(input.assignedClassIds ?? user.assignedClassIds, user._id, session);
+    }
     const before = {
       fullName: user.fullName,
       isActive: user.isActive,
+      phone: user.phone,
       assignedClassIds: [...user.assignedClassIds],
     };
 
@@ -90,6 +133,7 @@ export async function updateUser(
     const changes = diffFields(before, {
       fullName: user.fullName,
       isActive: user.isActive,
+      phone: user.phone,
       assignedClassIds: [...user.assignedClassIds],
     });
     await writeAudit(session, {
@@ -103,7 +147,10 @@ export async function updateUser(
   });
 }
 
-/** Sets a new password and logs the user out (they must log in with the new one). */
+/**
+ * Sets a new password and logs the user out. They sign in with it once and are then asked to
+ * choose their own (mustChangePassword).
+ */
 export async function resetPassword(
   admin: AuthUser,
   id: string,
@@ -114,6 +161,7 @@ export async function resetPassword(
     const user = await findUserOrThrow(id, session);
     user.passwordHash = passwordHash;
     user.refreshTokenHash = null;
+    user.mustChangePassword = true;
     await user.save({ session });
     await writeAudit(session, {
       action: 'PASSWORD_RESET',

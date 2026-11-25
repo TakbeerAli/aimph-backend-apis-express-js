@@ -20,6 +20,11 @@ export interface SettingsAttrs extends SyncFields {
   voucherDueDay: number;
   receiptFooter: string;
   currentSessionId: string | null;
+  /** Set-up checklist: the Admin said there are no old dues to enter. */
+  openingBalancesSkipped: boolean;
+  /** School logo as a data URI (image/png or image/jpeg). Fetched separately: GET /settings/logo. */
+  logoData: string | null;
+  logoUpdatedAt: Date | null;
   counters: { admissionNo: number; syncSeq: number };
 }
 
@@ -40,6 +45,10 @@ const settingsSchema = new Schema<SettingsAttrs>(
     voucherDueDay: { type: Number, default: 10, min: 1, max: 28 },
     receiptFooter: { type: String, default: '', trim: true },
     currentSessionId: { type: String, default: null },
+    openingBalancesSkipped: { type: Boolean, default: false },
+    // Up to ~500 KB; never loaded unless asked for, so settings stay small for every phone.
+    logoData: { type: String, default: null, select: false },
+    logoUpdatedAt: { type: Date, default: null },
     // Changed only through incrementCounter() (atomic $inc), never through save().
     counters: {
       admissionNo: { type: Number, default: 1000 },
@@ -53,7 +62,7 @@ const settingsSchema = new Schema<SettingsAttrs>(
     toJSON: {
       // Counters are internal and never leave the server.
       transform: (_doc, ret) => {
-        const { counters, ...rest } = ret;
+        const { counters, logoData, ...rest } = ret;
         return rest;
       },
     },

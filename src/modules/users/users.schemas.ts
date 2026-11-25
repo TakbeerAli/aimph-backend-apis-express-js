@@ -32,16 +32,23 @@ export const userIdParams = z.object({ id });
 
 export const listUsersQuery = pageQuery(['fullName', 'username', 'createdAt'], 'fullName');
 
+/** Optional mobile number, e.g. 0300-0000000. */
+const phone = z
+  .string()
+  .trim()
+  .regex(/^\+?[0-9][0-9 -]{6,18}$/, 'Enter a valid phone number, e.g. 0300-0000000.');
+
 export const createUserBody = z.object({
   fullName,
   username,
   password: newPassword,
   deviceCode,
+  phone: phone.optional(),
   assignedClassIds: assignedClassIds.default([]),
 });
 
 export const updateUserBody = z
-  .object({ fullName, isActive: z.boolean(), assignedClassIds })
+  .object({ fullName, isActive: z.boolean(), assignedClassIds, phone: phone.nullable() })
   .partial()
   .refine((body) => Object.keys(body).length > 0, { message: 'Nothing to update.' });
 

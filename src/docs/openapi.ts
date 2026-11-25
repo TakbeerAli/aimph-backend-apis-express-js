@@ -26,7 +26,7 @@ import {
   statusListQuery,
 } from '../modules/reports/reports.schemas.js';
 import { createSessionBody } from '../modules/sessions/sessions.schemas.js';
-import { updateSettingsBody } from '../modules/settings/settings.schemas.js';
+import { putLogoBody, updateSettingsBody } from '../modules/settings/settings.schemas.js';
 import {
   admitStudentBody,
   changeSectionBody,
@@ -59,7 +59,7 @@ import {
 type Access = 'public' | 'any' | 'admin';
 
 interface Route {
-  method: 'get' | 'post' | 'patch' | 'put';
+  method: 'get' | 'post' | 'patch' | 'put' | 'delete';
   path: string;
   tag: string;
   summary: string;
@@ -111,8 +111,14 @@ const routes: Route[] = [
   r('patch', '/settings', 'Settings', 'Update settings (not counters)', 'admin', {
     body: updateSettingsBody,
   }),
+  r('get', '/settings/logo', 'Settings', 'School logo as a data URI (null if none)', 'any'),
+  r('put', '/settings/logo', 'Settings', 'Upload the school logo (PNG/JPEG data URI)', 'admin', {
+    body: putLogoBody,
+  }),
+  r('delete', '/settings/logo', 'Settings', 'Remove the school logo', 'admin'),
+  r('get', '/setup/status', 'Settings', 'Admin set-up checklist (7 steps)', 'admin'),
 
-  r('get', '/sessions', 'Sessions', 'List academic sessions', 'any'),
+  r('get', '/sessions', 'Sessions', 'List sessions with student count and unpaid dues', 'any'),
   r('post', '/sessions', 'Sessions', 'Create a session (the first becomes current)', 'admin', {
     body: createSessionBody,
   }),

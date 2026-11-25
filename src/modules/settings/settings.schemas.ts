@@ -19,8 +19,18 @@ export const updateSettingsBody = z
     voucherIssueDay: z.int().min(1).max(28),
     voucherDueDay: z.int().min(1).max(28),
     receiptFooter: text(300),
+    openingBalancesSkipped: z.boolean(),
   })
   .partial()
   .refine((body) => Object.keys(body).length > 0, { message: 'Nothing to update.' });
 
+/** A PNG or JPEG as a data URI, at most ~500 KB of image data. */
+export const putLogoBody = z.object({
+  dataUri: z
+    .string()
+    .regex(/^data:image\/(png|jpeg);base64,[A-Za-z0-9+/]+={0,2}$/, 'Send a PNG or JPEG image.')
+    .max(700_000, 'The logo is too large. Use an image under 500 KB.'),
+});
+
 export type UpdateSettingsInput = z.infer<typeof updateSettingsBody>;
+export type PutLogoInput = z.infer<typeof putLogoBody>;

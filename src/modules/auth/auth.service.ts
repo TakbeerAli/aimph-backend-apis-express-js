@@ -133,6 +133,7 @@ export async function changePassword(
     if (!user) throw new AppError('UNAUTHORIZED', 'Please log in.');
     user.passwordHash = passwordHash;
     user.refreshTokenHash = hashToken(tokens.refreshToken);
+    user.mustChangePassword = false;
     await user.save({ session });
     await writeAudit(session, {
       action: 'PASSWORD_CHANGE',

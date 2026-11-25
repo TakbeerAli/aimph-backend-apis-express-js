@@ -18,6 +18,10 @@ export interface UserAttrs extends SyncFields {
   lastReceiptSeq: number;
   assignedClassIds: string[];
   isActive: boolean;
+  /** Optional mobile number, for the Admin's reference. */
+  phone: string | null;
+  /** Set when the Admin creates the user or resets the password; cleared by change-password. */
+  mustChangePassword: boolean;
   refreshTokenHash: string | null;
   lastLoginAt: Date | null;
   lastSyncAt: Date | null;
@@ -47,6 +51,8 @@ const userSchema = new Schema<UserAttrs>(
     },
     assignedClassIds: { type: [String], default: [] },
     isActive: { type: Boolean, default: true },
+    phone: { type: String, default: null, trim: true, maxlength: 25 },
+    mustChangePassword: { type: Boolean, default: false },
     refreshTokenHash: { type: String, default: null, select: false },
     lastLoginAt: { type: Date, default: null },
     lastSyncAt: { type: Date, default: null },

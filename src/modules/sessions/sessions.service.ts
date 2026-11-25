@@ -5,11 +5,40 @@ import type { AuthUser } from '../../common/middleware/auth.js';
 import { sessionDates } from '../../common/utils/dates.js';
 import { withTransaction } from '../../db/transaction.js';
 import { getSettings } from '../settings/settings.service.js';
+import { Student } from '../students/students.model.js';
+import { OPEN_BALANCE, Voucher } from '../vouchers/vouchers.model.js';
 import { AcademicSession, type AcademicSessionDoc } from './sessions.model.js';
 import type { CreateSessionInput } from './sessions.schemas.js';
 
-export async function listSessions(): Promise<AcademicSessionDoc[]> {
-  return AcademicSession.find().sort({ startDate: -1 });
+export interface SessionListItem {
+  [key: string]: unknown;
+  /** Students who studied in the session (any class, any outcome). */
+  studentCount: number;
+  /** Unpaid balance of the session's vouchers (for a closed session: old dues). */
+  openDues: number;
+}
+
+/** Newest first, each with its student count and unpaid dues (Academic Sessions screen). */
+export async function listSessions(): Promise<SessionListItem[]> {
+  const [sessions, students, dues] = await Promise.all([
+    AcademicSession.find().sort({ startDate: -1 }),
+    Student.aggregate<{ _id: string; count: number }>([
+      { $unwind: '$classHistory' },
+      { $group: { _id: { s: '$classHistory.sessionId', st: '$_id' } } },
+      { $group: { _id: '$_id.s', count: { $sum: 1 } } },
+    ]),
+    Voucher.aggregate<{ _id: string; amount: number }>([
+      { $match: OPEN_BALANCE },
+      { $group: { _id: '$sessionId', amount: { $sum: '$balance' } } },
+    ]),
+  ]);
+  const studentsBy = new Map(students.map((s) => [s._id, s.count]));
+  const duesBy = new Map(dues.map((d) => [d._id, d.amount]));
+  return sessions.map((s) => ({
+    ...s.toJSON(),
+    studentCount: studentsBy.get(s._id) ?? 0,
+    openDues: duesBy.get(s._id) ?? 0,
+  }));
 }
 
 /**

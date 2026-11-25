@@ -69,3 +69,31 @@ export async function updateSettings(
     return settings;
   });
 }
+
+/** The school logo as a data URI, or null when none was uploaded. */
+export async function getLogo(): Promise<{ dataUri: string | null; updatedAt: Date | null }> {
+  const settings = await Settings.findById(SETTINGS_ID, { logoData: 1, logoUpdatedAt: 1 });
+  return { dataUri: settings?.logoData ?? null, updatedAt: settings?.logoUpdatedAt ?? null };
+}
+
+/** Replaces (or with null, removes) the school logo printed on vouchers and receipts. */
+export async function setLogo(
+  user: AuthUser,
+  dataUri: string | null,
+): Promise<{ updatedAt: Date | null }> {
+  return withTransaction(async (session) => {
+    const settings = await getSettings(session);
+    settings.logoData = dataUri;
+    settings.logoUpdatedAt = dataUri ? new Date() : null;
+    await settings.save({ session });
+    await writeAudit(session, {
+      action: 'SETTINGS_UPDATE',
+      userId: user.id,
+      entity: 'settings',
+      entityId: SETTINGS_ID,
+      // The image itself is not copied into the audit log, only that it changed.
+      after: { logo: dataUri ? 'uploaded' : 'removed' },
+    });
+    return { updatedAt: settings.logoUpdatedAt };
+  });
+}
