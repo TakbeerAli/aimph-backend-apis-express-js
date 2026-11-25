@@ -9,6 +9,19 @@ export interface BankDetails {
   branch: string;
 }
 
+/** Who signs certificates. Snapshots copy these at issue time, so later changes never alter them. */
+export interface CertificateSettings {
+  /** Required before the first certificate is issued. */
+  principalName: string;
+  designation: string;
+  signatureUrl: string | null;
+  stampUrl: string | null;
+  /** false = print a blank line for a hand signature. */
+  printSignature: boolean;
+  /** Increases on every change, so phones can tell when to refresh cached images. */
+  version: number;
+}
+
 export interface SettingsAttrs extends SyncFields {
   _id: string;
   schoolName: string;
@@ -25,7 +38,12 @@ export interface SettingsAttrs extends SyncFields {
   /** School logo as a data URI (image/png or image/jpeg). Fetched separately: GET /settings/logo. */
   logoData: string | null;
   logoUpdatedAt: Date | null;
-  counters: { admissionNo: number; syncSeq: number };
+  certificate: CertificateSettings;
+  /**
+   * certificates: one sequence per type and calendar year, e.g. { "SLC-2026": 23 }.
+   * Only ever increased with an atomic $inc inside the issue transaction.
+   */
+  counters: { admissionNo: number; syncSeq: number; certificates?: Map<string, number> };
 }
 
 const settingsSchema = new Schema<SettingsAttrs>(
@@ -49,10 +67,19 @@ const settingsSchema = new Schema<SettingsAttrs>(
     // Up to ~500 KB; never loaded unless asked for, so settings stay small for every phone.
     logoData: { type: String, default: null, select: false },
     logoUpdatedAt: { type: Date, default: null },
-    // Changed only through incrementCounter() (atomic $inc), never through save().
+    certificate: {
+      principalName: { type: String, default: '', trim: true, maxlength: 80 },
+      designation: { type: String, default: 'Principal', trim: true, maxlength: 60 },
+      signatureUrl: { type: String, default: null },
+      stampUrl: { type: String, default: null },
+      printSignature: { type: Boolean, default: true },
+      version: { type: Number, default: 1, min: 1 },
+    },
+    // Changed only through atomic $inc updates, never through save().
     counters: {
       admissionNo: { type: Number, default: 1000 },
       syncSeq: { type: Number, default: 0 },
+      certificates: { type: Map, of: Number, default: undefined },
     },
   },
   {

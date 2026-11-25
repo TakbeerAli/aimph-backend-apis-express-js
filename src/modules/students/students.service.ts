@@ -8,7 +8,7 @@ import { incrementCounter, raiseCounterTo } from '../../db/counters.js';
 import { insertManySynced } from '../../db/syncPlugin.js';
 import { withTransaction } from '../../db/transaction.js';
 import { SchoolClass } from '../classes/classes.model.js';
-import { requireActivePlacement } from '../classes/classes.service.js';
+import { assertClassesExist, requireActivePlacement } from '../classes/classes.service.js';
 import { AcademicSession } from '../sessions/sessions.model.js';
 import { requireCurrentSession } from '../sessions/sessions.service.js';
 import { createAdmissionVoucher } from '../vouchers/vouchers.generate.js';
@@ -43,6 +43,8 @@ function newStudentDoc(
   return {
     ...(_id && { _id }),
     ...personal,
+    // Normally the class the student is admitted to now; old records may name an earlier one.
+    admissionClassId: personal.admissionClassId ?? classId,
     admissionNo,
     admissionDate,
     status: 'ACTIVE',
@@ -96,6 +98,7 @@ export async function admitStudent(user: AuthUser, input: AdmitStudentInput): Pr
   return withTransaction(async (session) => {
     const currentSession = await requireCurrentSession(session);
     await requireActivePlacement(input.classId, input.sectionId, session);
+    if (input.admissionClassId) await assertClassesExist([input.admissionClassId], session);
     const admissionNo = await assignAdmissionNo(input.admissionNo, session);
 
     const [student] = await Student.create(
@@ -190,6 +193,9 @@ export async function updateStudent(
       return Object.fromEntries(keys.map((k) => [k, all[k] as unknown]));
     };
     const before = snapshot();
+    if (personal.admissionClassId) {
+      await assertClassesExist([personal.admissionClassId], session);
+    }
 
     // null clears an optional field.
     for (const [key, value] of Object.entries(personal)) student.set(key, value ?? undefined);
@@ -300,6 +306,9 @@ export async function importStudents(user: AuthUser, rows: unknown[]): Promise<I
     if (!cls || !section) errors.push({ row, message: 'Class or section not found.' });
     else if (!cls.isActive || !section.isActive) {
       errors.push({ row, message: `${cls.name} section ${section.name} is not active.` });
+    }
+    if (input.admissionClassId && !classes.has(input.admissionClassId)) {
+      errors.push({ row, message: 'Admission class not found.' });
     }
 
     const unique: [string | undefined, string][] = [

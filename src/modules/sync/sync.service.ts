@@ -139,6 +139,7 @@ const PULLED = [
   'payments',
   'settings',
   'users',
+  'certificates',
 ] as const;
 type PulledCollection = (typeof PULLED)[number];
 
@@ -163,7 +164,11 @@ function sources(user: AuthUser): {
   filter: mongo.Filter<PulledDoc>;
   projection?: Record<string, 0>;
 }[] {
-  return [
+  const all: {
+    name: PulledCollection;
+    filter: mongo.Filter<PulledDoc>;
+    projection?: Record<string, 0>;
+  }[] = [
     { name: 'academic_sessions', filter: {} },
     { name: 'classes', filter: {} },
     // Staff phones get all students and vouchers (read-only) so search works offline.
@@ -188,7 +193,10 @@ function sources(user: AuthUser): {
       filter: { _id: user.id },
       projection: { passwordHash: 0, refreshTokenHash: 0 },
     },
+    // Certificates live only on the Admin phone; Staff phones never receive them.
+    { name: 'certificates', filter: {} },
   ];
+  return user.role === 'ADMIN' ? all : all.filter((source) => source.name !== 'certificates');
 }
 
 /**

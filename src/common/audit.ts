@@ -30,7 +30,13 @@ export type AuditAction =
   | 'VOUCHER_CANCEL'
   | 'VOUCHERS_GENERATE'
   | 'OPENING_BALANCES_CREATE'
-  | 'FEE_STRUCTURE_UPDATE';
+  | 'FEE_STRUCTURE_UPDATE'
+  | 'CERT_ISSUE'
+  | 'CERT_CANCEL'
+  | 'CERT_REPRINT'
+  | 'CERT_SETTINGS_UPDATE'
+  | 'CERT_SIGNATURE_CHANGE'
+  | 'CERT_STAMP_CHANGE';
 
 export interface AuditEntry {
   action: AuditAction;

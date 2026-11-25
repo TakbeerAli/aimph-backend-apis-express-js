@@ -40,6 +40,10 @@ const personalFields = {
   previousSchool: text(120),
   admissionDate: dateOnlySchema,
   address: text(250),
+  // Printed on certificates.
+  religion: text(30),
+  nationality: text(30),
+  placeOfBirth: text(60),
 };
 
 export const studentIdParams = z.object({ id });
@@ -54,6 +58,11 @@ export const admitStudentBody = z
     photoUrl: personalFields.photoUrl.optional(),
     previousSchool: personalFields.previousSchool.optional(),
     admissionDate: personalFields.admissionDate.optional(),
+    religion: personalFields.religion.optional(),
+    nationality: personalFields.nationality.optional(),
+    placeOfBirth: personalFields.placeOfBirth.optional(),
+    /** Class first admitted to, when it differs from classId (e.g. typing in old records). */
+    admissionClassId: id.optional(),
     guardian: z.object({
       ...guardianFields,
       fatherCnic: guardianFields.fatherCnic.optional(),
@@ -83,6 +92,10 @@ export const updateStudentBody = z.object({
   previousSchool: personalFields.previousSchool.nullable().optional(),
   admissionDate: personalFields.admissionDate.optional(),
   address: personalFields.address.optional(),
+  religion: personalFields.religion.nullable().optional(),
+  nationality: personalFields.nationality.nullable().optional(),
+  placeOfBirth: personalFields.placeOfBirth.nullable().optional(),
+  admissionClassId: id.optional(),
   guardian: z
     .object({
       fatherName: guardianFields.fatherName,

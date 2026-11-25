@@ -1,3 +1,4 @@
+import type { ClientSession } from 'mongoose';
 import { writeAudit } from '../../common/audit.js';
 import { AppError } from '../../common/errors.js';
 import type { AuthUser } from '../../common/middleware/auth.js';
@@ -21,77 +22,96 @@ export async function withdrawStudent(
   user: AuthUser,
   id: string,
   input: WithdrawInput,
-): Promise<{ student: StudentDoc; duesAtWithdrawal: number; waivedVouchers: number }> {
+): Promise<WithdrawResult> {
   return withTransaction(async (session) => {
     const student = await Student.findById(id).session(session);
     if (!student) throw new AppError('NOT_FOUND', 'Student not found.');
-    if (student.status !== 'ACTIVE') {
-      throw new AppError('STUDENT_NOT_ACTIVE', 'Only active students can be withdrawn.');
-    }
-
-    const openVouchers = await Voucher.find({ studentId: student._id, ...OPEN_BALANCE })
-      .sort({ feeMonth: 1 })
-      .session(session);
-    const duesAtWithdrawal = openVouchers.reduce((sum, v) => sum + v.balance, 0);
-
-    if (input.duesAction === 'COLLECTED' && duesAtWithdrawal > 0) {
-      throw new AppError(
-        'VALIDATION_ERROR',
-        `${formatPkr(duesAtWithdrawal)} is still due. Collect the payment first, or keep or waive the dues.`,
-        { duesAtWithdrawal },
-      );
-    }
-    if (input.duesAction === 'WAIVED') {
-      const reason = input.waiveReason ?? 'Waived at withdrawal';
-      for (const voucher of openVouchers) {
-        const amount = voucher.balance;
-        voucher.waivers.push({ amount, reason, by: user.id, at: new Date() });
-        recalcVoucher(voucher);
-        await voucher.save({ session });
-        await writeAudit(session, {
-          action: 'DUES_WAIVE',
-          userId: user.id,
-          entity: 'voucher',
-          entityId: voucher._id,
-          before: { balance: amount },
-          after: { waived: amount, balance: voucher.balance },
-          reason,
-        });
-      }
-    }
-
-    const date = input.date ?? today();
-    const entry = student.classHistory.findLast((h) => h.outcome === 'IN_PROGRESS');
-    if (entry) {
-      entry.outcome = 'WITHDRAWN';
-      entry.endDate = date;
-    }
-    student.status = 'WITHDRAWN';
-    student.withdrawal = {
-      date,
-      reason: input.reason,
-      ...(input.reasonNote && { reasonNote: input.reasonNote }),
-      duesAction: input.duesAction,
-      duesAtWithdrawal,
-      processedBy: user.id,
-    };
-    await student.save({ session });
-
-    await writeAudit(session, {
-      action: 'STUDENT_WITHDRAW',
-      userId: user.id,
-      entity: 'student',
-      entityId: student._id,
-      before: { status: 'ACTIVE' },
-      after: { status: 'WITHDRAWN', duesAction: input.duesAction, duesAtWithdrawal },
-      ...(input.waiveReason && { reason: input.waiveReason }),
-    });
-    return {
-      student,
-      duesAtWithdrawal,
-      waivedVouchers: input.duesAction === 'WAIVED' ? openVouchers.length : 0,
-    };
+    return withdrawInTransaction(session, user, student, input);
   });
+}
+
+export interface WithdrawResult {
+  student: StudentDoc;
+  duesAtWithdrawal: number;
+  waivedVouchers: number;
+}
+
+/**
+ * The withdrawal itself, inside the caller's transaction (also used when a Leaving Certificate
+ * is issued). `student` must have been loaded with the same session.
+ */
+export async function withdrawInTransaction(
+  session: ClientSession,
+  user: AuthUser,
+  student: StudentDoc,
+  input: WithdrawInput,
+): Promise<WithdrawResult> {
+  if (student.status !== 'ACTIVE') {
+    throw new AppError('STUDENT_NOT_ACTIVE', 'Only active students can be withdrawn.');
+  }
+
+  const openVouchers = await Voucher.find({ studentId: student._id, ...OPEN_BALANCE })
+    .sort({ feeMonth: 1 })
+    .session(session);
+  const duesAtWithdrawal = openVouchers.reduce((sum, v) => sum + v.balance, 0);
+
+  if (input.duesAction === 'COLLECTED' && duesAtWithdrawal > 0) {
+    throw new AppError(
+      'VALIDATION_ERROR',
+      `${formatPkr(duesAtWithdrawal)} is still due. Collect the payment first, or keep or waive the dues.`,
+      { duesAtWithdrawal },
+    );
+  }
+  if (input.duesAction === 'WAIVED') {
+    const reason = input.waiveReason ?? 'Waived at withdrawal';
+    for (const voucher of openVouchers) {
+      const amount = voucher.balance;
+      voucher.waivers.push({ amount, reason, by: user.id, at: new Date() });
+      recalcVoucher(voucher);
+      await voucher.save({ session });
+      await writeAudit(session, {
+        action: 'DUES_WAIVE',
+        userId: user.id,
+        entity: 'voucher',
+        entityId: voucher._id,
+        before: { balance: amount },
+        after: { waived: amount, balance: voucher.balance },
+        reason,
+      });
+    }
+  }
+
+  const date = input.date ?? today();
+  const entry = student.classHistory.findLast((h) => h.outcome === 'IN_PROGRESS');
+  if (entry) {
+    entry.outcome = 'WITHDRAWN';
+    entry.endDate = date;
+  }
+  student.status = 'WITHDRAWN';
+  student.withdrawal = {
+    date,
+    reason: input.reason,
+    ...(input.reasonNote && { reasonNote: input.reasonNote }),
+    duesAction: input.duesAction,
+    duesAtWithdrawal,
+    processedBy: user.id,
+  };
+  await student.save({ session });
+
+  await writeAudit(session, {
+    action: 'STUDENT_WITHDRAW',
+    userId: user.id,
+    entity: 'student',
+    entityId: student._id,
+    before: { status: 'ACTIVE' },
+    after: { status: 'WITHDRAWN', duesAction: input.duesAction, duesAtWithdrawal },
+    ...(input.waiveReason && { reason: input.waiveReason }),
+  });
+  return {
+    student,
+    duesAtWithdrawal,
+    waivedVouchers: input.duesAction === 'WAIVED' ? openVouchers.length : 0,
+  };
 }
 
 export interface PromotionResult {

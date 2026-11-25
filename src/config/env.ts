@@ -38,6 +38,15 @@ const envSchema = z
     TZ_BUSINESS: z.string().refine(isValidTimeZone, 'Must be a valid IANA time zone'),
     /** Number of proxies in front of the app (1 on Render/Railway). 0 when run directly. */
     TRUST_PROXY: z.coerce.number().int().min(0).max(5).default(0),
+    /**
+     * Where certificate images (signature, stamp) are stored. "memory" keeps them in the process
+     * (tests only). When unset: cloudinary if its credentials are present, otherwise none
+     * (uploads answer SERVICE_UNAVAILABLE).
+     */
+    STORAGE_PROVIDER: z.enum(['cloudinary', 'memory', 'none']).optional(),
+    CLOUDINARY_CLOUD_NAME: z.string().min(1).optional(),
+    CLOUDINARY_API_KEY: z.string().min(1).optional(),
+    CLOUDINARY_API_SECRET: z.string().min(1).optional(),
   })
   .superRefine((env, ctx) => {
     if (env.JWT_ACCESS_SECRET === env.JWT_REFRESH_SECRET) {
@@ -45,6 +54,24 @@ const envSchema = z
         code: 'custom',
         path: ['JWT_REFRESH_SECRET'],
         message: 'Must differ from JWT_ACCESS_SECRET',
+      });
+    }
+    if (env.STORAGE_PROVIDER === 'cloudinary') {
+      for (const key of [
+        'CLOUDINARY_CLOUD_NAME',
+        'CLOUDINARY_API_KEY',
+        'CLOUDINARY_API_SECRET',
+      ] as const) {
+        if (!env[key]) {
+          ctx.addIssue({ code: 'custom', path: [key], message: 'Required for Cloudinary storage' });
+        }
+      }
+    }
+    if (env.NODE_ENV === 'production' && env.STORAGE_PROVIDER === 'memory') {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['STORAGE_PROVIDER'],
+        message: 'memory storage loses files on restart; use cloudinary in production',
       });
     }
     if (env.NODE_ENV === 'production') {

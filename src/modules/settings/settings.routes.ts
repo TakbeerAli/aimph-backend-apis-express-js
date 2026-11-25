@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { requireRole } from '../../common/middleware/auth.js';
 import { validate } from '../../common/middleware/validate.js';
+import { certificateSettingsRouter } from './certificate-settings.js';
 import * as controller from './settings.controller.js';
 import { putLogoBody, updateSettingsBody } from './settings.schemas.js';
 
@@ -23,3 +24,6 @@ settingsRouter.put(
   controller.putLogo,
 );
 settingsRouter.delete('/logo', requireRole('ADMIN'), controller.deleteLogo);
+
+// Certificate signer, signature and stamp (Admin only).
+settingsRouter.use('/certificate', certificateSettingsRouter);

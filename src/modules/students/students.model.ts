@@ -69,6 +69,13 @@ export interface StudentAttrs extends SyncFields {
   previousSchool?: string;
   admissionDate: Date;
   address: string;
+  /** Printed on certificates (optional; older records have none). */
+  religion?: string;
+  /** Printed on certificates; "Pakistani" unless given. */
+  nationality?: string;
+  placeOfBirth?: string;
+  /** Class the student was first admitted to (certificates: "admitted in Prep"). */
+  admissionClassId?: string;
   guardian: Guardian;
   status: StudentStatus;
   current: Placement;
@@ -145,6 +152,10 @@ const studentSchema = new Schema<StudentAttrs>(
     previousSchool: { type: String, trim: true, maxlength: 120 },
     admissionDate: { type: Date, required: true },
     address: { type: String, required: true, trim: true, maxlength: 250 },
+    religion: { type: String, trim: true, maxlength: 30 },
+    nationality: { type: String, trim: true, maxlength: 30, default: 'Pakistani' },
+    placeOfBirth: { type: String, trim: true, maxlength: 60 },
+    admissionClassId: { type: String },
     guardian: { type: guardianSchema, required: true },
     status: { type: String, enum: STUDENT_STATUSES, required: true, default: 'ACTIVE' },
     current: { type: new Schema<Placement>(placementFields, { _id: false }), required: true },

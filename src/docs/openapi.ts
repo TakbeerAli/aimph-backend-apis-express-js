@@ -26,6 +26,14 @@ import {
   statusListQuery,
 } from '../modules/reports/reports.schemas.js';
 import { createSessionBody } from '../modules/sessions/sessions.schemas.js';
+import {
+  cancelCertificateBody,
+  checkCertificateBody,
+  issueCertificateBody,
+  listCertificatesQuery,
+  reprintBody,
+} from '../modules/certificates/certificates.schemas.js';
+import { updateCertificateSettingsBody } from '../modules/settings/certificate-settings.js';
 import { putLogoBody, updateSettingsBody } from '../modules/settings/settings.schemas.js';
 import {
   admitStudentBody,
@@ -66,6 +74,8 @@ interface Route {
   access: Access;
   body?: z.ZodType;
   query?: z.ZodType;
+  /** multipart/form-data with one image in the field "file". */
+  upload?: boolean;
 }
 
 const r = (
@@ -74,7 +84,7 @@ const r = (
   tag: string,
   summary: string,
   access: Access,
-  extra: Pick<Route, 'body' | 'query'> = {},
+  extra: Pick<Route, 'body' | 'query' | 'upload'> = {},
 ): Route => ({ method, path, tag, summary, access, ...extra });
 
 const routes: Route[] = [
@@ -116,6 +126,82 @@ const routes: Route[] = [
     body: putLogoBody,
   }),
   r('delete', '/settings/logo', 'Settings', 'Remove the school logo', 'admin'),
+  r(
+    'get',
+    '/settings/certificate',
+    'Certificates',
+    'Certificate signer, signature, stamp',
+    'admin',
+  ),
+  r(
+    'patch',
+    '/settings/certificate',
+    'Certificates',
+    'Update principal name/designation',
+    'admin',
+    {
+      body: updateCertificateSettingsBody,
+    },
+  ),
+  r(
+    'post',
+    '/settings/certificate/signature',
+    'Certificates',
+    "Upload the principal's signature (PNG/JPG, max 2 MB; cleaned to a transparent PNG)",
+    'admin',
+    { upload: true },
+  ),
+  r(
+    'post',
+    '/settings/certificate/stamp',
+    'Certificates',
+    'Upload the school stamp (PNG/JPG, max 2 MB; cleaned to a transparent PNG)',
+    'admin',
+    { upload: true },
+  ),
+  r(
+    'delete',
+    '/settings/certificate/stamp',
+    'Certificates',
+    'Stop printing the stamp (the file is kept for old certificates)',
+    'admin',
+  ),
+  r(
+    'post',
+    '/certificates/check',
+    'Certificates',
+    'Check the issue rules for a student without issuing (with the form prefill)',
+    'admin',
+    { body: checkCertificateBody },
+  ),
+  r(
+    'post',
+    '/certificates',
+    'Certificates',
+    'Issue a certificate (SLC also withdraws an active student, in one transaction)',
+    'admin',
+    { body: issueCertificateBody },
+  ),
+  r('get', '/certificates', 'Certificates', 'List certificates (newest first)', 'admin', {
+    query: listCertificatesQuery,
+  }),
+  r('get', '/certificates/{id}', 'Certificates', 'One certificate with its snapshot', 'admin'),
+  r(
+    'post',
+    '/certificates/{id}/reprint',
+    'Certificates',
+    'Record a reprint (the certificate itself never changes)',
+    'admin',
+    { body: reprintBody },
+  ),
+  r(
+    'post',
+    '/certificates/{id}/cancel',
+    'Certificates',
+    'Cancel with a reason (the number is never reused; an SLC does not re-activate the student)',
+    'admin',
+    { body: cancelCertificateBody },
+  ),
   r('get', '/setup/status', 'Settings', 'Admin set-up checklist (7 steps)', 'admin'),
 
   r('get', '/sessions', 'Sessions', 'List sessions with student count and unpaid dues', 'any'),
@@ -364,6 +450,20 @@ export function buildOpenApiDocument(): Record<string, unknown> {
         ...pathParameters(route.path),
         ...(route.query ? queryParameters(route.query) : []),
       ],
+      ...(route.upload && {
+        requestBody: {
+          required: true,
+          content: {
+            'multipart/form-data': {
+              schema: {
+                type: 'object',
+                required: ['file'],
+                properties: { file: { type: 'string', format: 'binary' } },
+              },
+            },
+          },
+        },
+      }),
       ...(route.body && {
         requestBody: {
           required: true,
@@ -387,7 +487,7 @@ export function buildOpenApiDocument(): Record<string, unknown> {
       title: 'Al-Mahdi School Fee Manager API',
       version: '1.0.0',
       description:
-        'Phase 1: students and fees. Money is whole PKR. Business dates use Asia/Karachi; ' +
+        'Students, fees and certificates. Money is whole PKR. Business dates use Asia/Karachi; ' +
         'timestamps are UTC. Errors always look like `{ "error": { "code", "message", "details" } }`.',
     },
     servers: [{ url: '/api/v1' }],

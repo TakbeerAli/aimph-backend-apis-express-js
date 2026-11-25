@@ -65,34 +65,39 @@ The seed data ends in November 2026, so it must be run on or after 1 Nov 2026.
 
 All are validated at startup; the app refuses to start if one is missing or invalid.
 
-| Variable             | Example                                            | Notes                                                                                  |
-| -------------------- | -------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| `NODE_ENV`           | `development`                                      | `development`, `test` or `production`                                                  |
-| `PORT`               | `4000`                                             |                                                                                        |
-| `MONGODB_URI`        | `mongodb://localhost:27017/almahdi?replicaSet=rs0` | Must be a replica set (Atlas always is)                                                |
-| `JWT_ACCESS_SECRET`  |                                                    | Signs 15-minute access tokens. In production: 32+ random characters                    |
-| `JWT_REFRESH_SECRET` |                                                    | Signs 30-day refresh tokens. Must differ from the access secret                        |
-| `ACCESS_TOKEN_TTL`   | `15m`                                              | Number + `s`/`m`/`h`/`d`                                                               |
-| `REFRESH_TOKEN_TTL`  | `30d`                                              |                                                                                        |
-| `CORS_ORIGINS`       | `http://localhost:8081`                            | Comma-separated browser origins. The Android app sends no Origin and is always allowed |
-| `TZ_BUSINESS`        | `Asia/Karachi`                                     | Time zone for fee months, due dates and report days                                    |
-| `TRUST_PROXY`        | `0`                                                | Optional. Set `1` behind Render/Railway/nginx so rate limits see the real client IP    |
-| `SEED_PASSWORD`      |                                                    | Optional, seed script only                                                             |
+| Variable                | Example                                            | Notes                                                                                                                                                                                                 |
+| ----------------------- | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_ENV`              | `development`                                      | `development`, `test` or `production`                                                                                                                                                                 |
+| `PORT`                  | `4000`                                             |                                                                                                                                                                                                       |
+| `MONGODB_URI`           | `mongodb://localhost:27017/almahdi?replicaSet=rs0` | Must be a replica set (Atlas always is)                                                                                                                                                               |
+| `JWT_ACCESS_SECRET`     |                                                    | Signs 15-minute access tokens. In production: 32+ random characters                                                                                                                                   |
+| `JWT_REFRESH_SECRET`    |                                                    | Signs 30-day refresh tokens. Must differ from the access secret                                                                                                                                       |
+| `ACCESS_TOKEN_TTL`      | `15m`                                              | Number + `s`/`m`/`h`/`d`                                                                                                                                                                              |
+| `REFRESH_TOKEN_TTL`     | `30d`                                              |                                                                                                                                                                                                       |
+| `CORS_ORIGINS`          | `http://localhost:8081`                            | Comma-separated browser origins. The Android app sends no Origin and is always allowed                                                                                                                |
+| `TZ_BUSINESS`           | `Asia/Karachi`                                     | Time zone for fee months, due dates and report days                                                                                                                                                   |
+| `TRUST_PROXY`           | `0`                                                | Optional. Set `1` behind Render/Railway/nginx so rate limits see the real client IP                                                                                                                   |
+| `SEED_PASSWORD`         |                                                    | Optional, seed script only                                                                                                                                                                            |
+| `STORAGE_PROVIDER`      | `cloudinary`                                       | Optional. Where certificate signature/stamp images go: `cloudinary` or `none` (`memory` is for tests). Default: `cloudinary` when the three keys below are set, otherwise `none` (uploads answer 503) |
+| `CLOUDINARY_CLOUD_NAME` |                                                    | Cloudinary account (Settings → API Keys)                                                                                                                                                              |
+| `CLOUDINARY_API_KEY`    |                                                    |                                                                                                                                                                                                       |
+| `CLOUDINARY_API_SECRET` |                                                    | Keep secret; never commit it                                                                                                                                                                          |
 
 Generate secrets with `node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"`.
 
 ## Scripts
 
-| Command                                                       | What it does                                                                            |
-| ------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| `npm run dev`                                                 | Start with reload (tsx)                                                                 |
-| `npm run build`                                               | Compile to `dist/`                                                                      |
-| `npm start`                                                   | Run the compiled server (`node dist/server.js`)                                         |
-| `npm test`                                                    | All tests (in-memory MongoDB replica set; first run downloads a MongoDB binary)         |
-| `npm run test:watch`                                          | Tests in watch mode                                                                     |
-| `npm run typecheck` · `npm run lint` · `npm run format`       | TypeScript, ESLint, Prettier                                                            |
-| `npm run seed`                                                | Sample data (see above)                                                                 |
-| `npm run create-admin -- --username admin --name "Full Name"` | Create the single Admin for a real install (password asked hidden, or `ADMIN_PASSWORD`) |
+| Command                                                       | What it does                                                                             |
+| ------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `npm run dev`                                                 | Start with reload (tsx)                                                                  |
+| `npm run build`                                               | Compile to `dist/`                                                                       |
+| `npm start`                                                   | Run the compiled server (`node dist/server.js`)                                          |
+| `npm test`                                                    | All tests (in-memory MongoDB replica set; first run downloads a MongoDB binary)          |
+| `npm run test:watch`                                          | Tests in watch mode                                                                      |
+| `npm run typecheck` · `npm run lint` · `npm run format`       | TypeScript, ESLint, Prettier                                                             |
+| `npm run seed`                                                | Sample data (see above)                                                                  |
+| `npm run create-admin -- --username admin --name "Full Name"` | Create the single Admin for a real install (password asked hidden, or `ADMIN_PASSWORD`)  |
+| `npm run migrate:admission-class` (`-- --dry-run` to preview) | One-off: fills `admissionClassId` on older students from their first class-history entry |
 
 ## Tests
 
@@ -104,7 +109,10 @@ Tests run against `mongodb-memory-server` in **replica-set mode**, so transactio
 Each test file gets its own database. Tests that depend on "today" fix the clock to 20 Nov 2026 (Karachi).
 They cover every scenario in the spec (Section 13): payments and double payments, idempotency, review
 resolution, reversal, vouchers and previous dues, admission numbers under concurrency, promotion, withdrawal,
-version conflicts, reports on Karachi day boundaries, and sync paging.
+version conflicts, reports on Karachi day boundaries, and sync paging. The certificate tests cover the
+12 certificate scenarios: dues block, SLC withdrawal and rollback, duplicates, numbering under concurrency
+and across years, cancel, frozen snapshots, reprints, date-in-words, image upload limits, Staff access and
+missing settings. Tests never upload to Cloudinary (`STORAGE_PROVIDER=memory`).
 
 ## API overview
 
@@ -113,16 +121,17 @@ Base path `/api/v1`, JSON only, `Authorization: Bearer <accessToken>`. Full list
 - Success: `{ "data": … }` · lists: `{ "data": { items, page, limit, total } }` (`?page=&limit=` up to 200, `?sort=field|-field`)
 - Error: `{ "error": { "code": "AMOUNT_EXCEEDS_BALANCE", "message": "…", "details": {} } }`
 
-| Area          | Endpoints                                                                                           |
-| ------------- | --------------------------------------------------------------------------------------------------- |
-| Auth          | login, refresh (rotating), logout, me, change-password                                              |
-| Users (Admin) | list, create Staff, update, reset password, sign out                                                |
-| Setup         | settings, sessions (+ set-current), classes and sections, fee structures (+ copy)                   |
-| Students      | search, profile, fee history, admit, edit (version), change section, withdraw, promote, import      |
-| Vouchers      | generate (+ preview), list (overdue filter), by number, fine, waive, cancel, opening balances       |
-| Payments      | collect (idempotent by `_id`), list, by receipt, reverse, needs-review, resolve                     |
-| Reports       | dashboard, daily collection, collection, class-wise, defaulters, status list, previous-session dues |
-| Sync          | `POST /sync/push`, `GET /sync/pull?since=&limit=`                                                   |
+| Area                 | Endpoints                                                                                           |
+| -------------------- | --------------------------------------------------------------------------------------------------- |
+| Auth                 | login, refresh (rotating), logout, me, change-password                                              |
+| Users (Admin)        | list, create Staff, update, reset password, sign out                                                |
+| Setup                | settings, sessions (+ set-current), classes and sections, fee structures (+ copy)                   |
+| Students             | search, profile, fee history, admit, edit (version), change section, withdraw, promote, import      |
+| Vouchers             | generate (+ preview), list (overdue filter), by number, fine, waive, cancel, opening balances       |
+| Payments             | collect (idempotent by `_id`), list, by receipt, reverse, needs-review, resolve                     |
+| Reports              | dashboard, daily collection, collection, class-wise, defaulters, status list, previous-session dues |
+| Sync                 | `POST /sync/push`, `GET /sync/pull?since=&limit=`                                                   |
+| Certificates (Admin) | settings (principal, signature/stamp upload), check, issue, list/search, detail, reprint, cancel    |
 
 ## How the important parts work
 
@@ -141,6 +150,30 @@ Base path `/api/v1`, JSON only, `Authorization: Bearer <accessToken>`. Full list
   synced collections are blocked for the same reason. Use `insertManySynced()` for bulk inserts.
 - **Reports** are aggregations at request time; no totals are stored. Reversed payments never count.
 
+### Certificates (Admin only)
+
+Four types: Leaving (`SLC`), Character (`CC`), Bonafide (`BF`) and Date of Birth (`DOB`). The server
+stores data only; the Admin phone renders and prints the PDF.
+
+- **Numbers** look like `SLC-2026-0007`: one sequence per type and calendar year (Asia/Karachi), taken with an
+  atomic `$inc` on `settings.counters.certificates` inside the issue transaction. An aborted issue rolls the
+  counter back; numbers are never reused, even after a cancel. A duplicate SLC gets the next number plus `-D`.
+- **Rules:** an SLC needs all dues cleared (`DUES_NOT_CLEAR` lists the open vouchers) and, if one already exists,
+  `isDuplicate` with a reason (`SLC_ALREADY_ISSUED`). A Bonafide is for active students only. Nothing can be
+  issued until the principal's name is set (`CERT_SETTINGS_MISSING`). `POST /certificates/check` runs the same
+  rules without issuing.
+- **One transaction:** rules → number → snapshot → insert → (SLC for an active student) withdraw with dues
+  "collected" → audit `CERT_ISSUE`.
+- **Snapshot:** everything printed (school, student, principal, signature/stamp URLs, he/she wording, form
+  values) is frozen at issue time by the server. Reprints use only the snapshot, so they match the original
+  even after the principal, signature or student record changes.
+- **Never edited or deleted:** mistakes are cancelled with a reason (an SLC does not re-activate the student).
+  Reprints only add to `reprints[]` and `reprintCount`.
+- **Images:** signature and stamp photos (PNG/JPG, max 2 MB, magic bytes checked) are cleaned with sharp
+  (rotate, trim, paper made transparent, max 900 px wide) and uploaded to Cloudinary under an unguessable key.
+  Old files are never deleted, because old certificates point at them.
+- **Sync:** certificates go only to the Admin phone; Staff never receive them.
+
 ## Project structure
 
 ```
@@ -148,10 +181,11 @@ src/
   app.ts, server.ts           Express app and startup
   config/env.ts               Zod-validated environment
   db/                         connection, withTransaction, counters, syncSeq/version plugin
-  common/                     errors, audit log, logger, middleware (auth, roles, validation, errors), utils
+  common/                     errors, audit log, logger, middleware (auth, roles, validation, errors, uploads), utils
+  common/storage/             image storage (Cloudinary) and signature/stamp image processing
   docs/openapi.ts             OpenAPI document built from the Zod schemas
   modules/<feature>/          *.model.ts, *.schemas.ts, *.service.ts (business logic), *.controller.ts, *.routes.ts, *.test.ts
-scripts/                      seed.ts, create-admin.ts
+scripts/                      seed.ts, create-admin.ts, backfill-admission-class.ts
 test/                         test setup and helpers
 ```
 
@@ -166,6 +200,8 @@ Controllers stay thin; all business logic lives in services.
 4. **Import** existing students (`POST /students/import`, all-or-nothing, errors listed per row).
 5. Enter each student's current dues from the paper registers as **opening balances** (`POST /vouchers/opening-balances`).
 6. **Generate** the month's vouchers (preview first).
+7. For certificates: set the principal's name and upload the signature (and stamp) in **Certificate Settings**.
+   On a database with students from before certificates existed, run `npm run migrate:admission-class` once.
 
 New admissions after go-live use `POST /students`, which also charges the first month's tuition + admission fee.
 
@@ -186,7 +222,8 @@ New admissions after go-live use `POST /students`, which also charges the first 
 Build `npm ci --include=dev && npm run build`, start `npm start`, Node 24. (`--include=dev` matters: hosts
 often set `NODE_ENV=production` during the build, and plain `npm ci` would then skip TypeScript.)
 Set the environment variables above with `NODE_ENV=production`, strong unique JWT secrets, the Atlas
-`MONGODB_URI`, and `TRUST_PROXY=1` on platforms that put a proxy in front of the app.
+`MONGODB_URI`, `TRUST_PROXY=1` on platforms that put a proxy in front of the app, and the three
+`CLOUDINARY_*` keys for certificate images.
 Health check path: `/api/v1/health`.
 
 - **Render:** New → Web Service from the GitHub repo; build `npm ci --include=dev && npm run build`; start `npm start`.
@@ -205,7 +242,7 @@ The app logs JSON to stdout (secrets redacted) and shuts down cleanly on SIGTERM
 - Access tokens 15 min; refresh tokens 30 days, rotated on each use and stored only as a SHA-256 hash.
   Reusing an old refresh token logs the user out.
 - Inactive users are rejected on login, refresh and every request.
-- `helmet`, CORS allow-list, 1 MB body limit, rate limits (login: 5 failed tries per 15 min per IP + username;
+- `helmet`, CORS allow-list, 1 MB JSON body limit (image uploads: one PNG/JPG up to 2 MB), rate limits (login: 5 failed tries per 15 min per IP + username;
   API: 300 requests/min per user).
 - Every input is validated with Zod (unknown fields dropped). Staff limits (own payments, assigned classes)
   are enforced in the services.

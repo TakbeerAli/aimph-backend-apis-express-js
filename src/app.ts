@@ -12,6 +12,7 @@ import { errorHandler } from './common/middleware/errorHandler.js';
 import { notFound } from './common/middleware/notFound.js';
 import { createApiLimiter, createLoginLimiter } from './common/middleware/rateLimit.js';
 import { createAuthRouter } from './modules/auth/auth.routes.js';
+import { certificatesRouter } from './modules/certificates/certificates.routes.js';
 import { classesRouter } from './modules/classes/classes.routes.js';
 import { healthRouter } from './modules/health/health.routes.js';
 import { sessionsRouter } from './modules/sessions/sessions.routes.js';
@@ -73,6 +74,7 @@ export function createApp(): Express {
   api.use('/reports', ...authed, reportsRouter);
   api.use('/sync', ...authed, syncRouter);
   api.use('/setup', ...authed, setupRouter);
+  api.use('/certificates', ...authed, certificatesRouter);
   app.use('/api/v1', api);
 
   // API docs, generated from the same Zod schemas the routes use.

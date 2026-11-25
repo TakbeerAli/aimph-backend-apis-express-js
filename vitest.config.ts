@@ -19,6 +19,8 @@ export default defineConfig({
       REFRESH_TOKEN_TTL: '30d',
       CORS_ORIGINS: 'http://localhost:8081',
       TZ_BUSINESS: 'Asia/Karachi',
+      // Never upload to a real account from tests (the local .env may hold Cloudinary keys).
+      STORAGE_PROVIDER: 'memory',
     },
   },
 });

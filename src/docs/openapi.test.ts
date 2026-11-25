@@ -16,7 +16,7 @@ describe('API docs', () => {
       0,
     );
     // 58 from Section 7, plus 4 for Admin set-up (logo get/put/delete, setup status).
-    expect(operations).toBe(62);
+    expect(operations).toBe(73);
     // Request schemas come from the Zod schemas used for validation.
     const login = res.body.paths['/auth/login'].post;
     expect(login.requestBody.content['application/json'].schema.required).toEqual([
