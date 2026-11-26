@@ -72,6 +72,17 @@ export const admitStudentBody = z
     classId: id,
     sectionId: id,
     rollNo: rollNo.optional(),
+    /**
+     * The amounts on the admission voucher, when the Admin changes what the fee structure
+     * would charge (e.g. no admission fee for a sibling). 0 leaves that line out; both 0 = no
+     * voucher. Left out: the fee structure amounts.
+     */
+    admissionFees: z
+      .object({
+        tuitionFee: z.int().min(0).max(1_000_000),
+        admissionFee: z.int().min(0).max(1_000_000),
+      })
+      .optional(),
   })
   .refine((s) => !s.admissionDate || s.dateOfBirth < s.admissionDate, {
     message: 'Date of birth must be before the admission date.',

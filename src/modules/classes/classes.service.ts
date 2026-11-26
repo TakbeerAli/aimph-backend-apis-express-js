@@ -4,6 +4,7 @@ import { AppError } from '../../common/errors.js';
 import type { AuthUser } from '../../common/middleware/auth.js';
 import { withTransaction } from '../../db/transaction.js';
 import { Student } from '../students/students.model.js';
+import { Voucher } from '../vouchers/vouchers.model.js';
 import { SchoolClass, type ClassAttrs, type ClassDoc, type SectionAttrs } from './classes.model.js';
 import type {
   AddSectionInput,
@@ -199,6 +200,67 @@ export async function updateSection(
 }
 
 /** Loads a class and one of its sections; both must exist and be active. */
+export interface DeleteSectionResult {
+  /** true: removed from the class; false: it has records, so it was only hidden (inactive). */
+  deleted: boolean;
+  class: ClassDoc;
+}
+
+/**
+ * Deletes a section. One with active students cannot be deleted. One that students or vouchers
+ * ever used is kept for their history and only hidden (isActive = false); an unused one is
+ * removed from the class.
+ */
+export async function deleteSection(
+  user: AuthUser,
+  classId: string,
+  sectionId: string,
+): Promise<DeleteSectionResult> {
+  return withTransaction(async (session) => {
+    const cls = await findClassOrThrow(classId, session);
+    const section = cls.sections.id(sectionId);
+    if (!section) throw new AppError('NOT_FOUND', 'Section not found.');
+
+    if ((await countActiveStudents({ 'current.sectionId': sectionId }, session)) > 0) {
+      throw new AppError(
+        'CONFLICT',
+        `Section ${section.name} still has active students. Move them to another section first.`,
+      );
+    }
+
+    const usedByStudents = await Student.exists({
+      $or: [
+        { 'current.sectionId': sectionId },
+        { 'classHistory.sectionId': sectionId },
+        { 'classHistory.sectionChanges.fromSectionId': sectionId },
+        { 'classHistory.sectionChanges.toSectionId': sectionId },
+      ],
+    }).session(session);
+    const usedByVouchers =
+      !usedByStudents && (await Voucher.exists({ sectionId }).session(session));
+    const deleted = !usedByStudents && !usedByVouchers;
+
+    const before = { name: section.name, isActive: section.isActive };
+    if (deleted) {
+      cls.sections.pull({ _id: sectionId });
+    } else {
+      section.isActive = false;
+    }
+    await cls.save({ session });
+
+    await writeAudit(session, {
+      action: 'SECTION_DELETE',
+      userId: user.id,
+      entity: 'class',
+      entityId: cls._id,
+      before: { sectionId, ...before },
+      ...(!deleted && { after: { sectionId, name: section.name, isActive: false } }),
+      reason: deleted ? 'Deleted (never used)' : 'Hidden: kept for old records',
+    });
+    return { deleted, class: cls };
+  });
+}
+
 export async function requireActivePlacement(
   classId: string,
   sectionId: string,

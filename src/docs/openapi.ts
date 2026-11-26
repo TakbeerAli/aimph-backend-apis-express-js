@@ -230,6 +230,13 @@ const routes: Route[] = [
     'admin',
     { body: updateSectionBody },
   ),
+  r(
+    'delete',
+    '/classes/{id}/sections/{sectionId}',
+    'Classes',
+    'Delete a section (one with old records is hidden instead; not one with active students)',
+    'admin',
+  ),
 
   r('get', '/students', 'Students', 'Search students (with current-session dues)', 'any', {
     query: listStudentsQuery,

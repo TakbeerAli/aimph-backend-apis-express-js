@@ -295,6 +295,8 @@ export async function createAdmissionVoucher(
   student: StudentDoc,
   currentSession: AcademicSessionDoc,
   session: ClientSession,
+  /** Amounts the Admin set on the Add Student form instead of the fee structure's. */
+  override?: { tuitionFee: number; admissionFee: number },
 ): Promise<VoucherDoc | null> {
   const fee = await FeeStructure.findOne({
     sessionId: currentSession._id,
@@ -317,8 +319,8 @@ export async function createAdmissionVoucher(
   if (live.has(student._id)) return null;
 
   const voucherLines = lines([
-    ['TUITION', fee.tuitionFee],
-    ['ADMISSION', fee.admissionFee],
+    ['TUITION', override?.tuitionFee ?? fee.tuitionFee],
+    ['ADMISSION', override?.admissionFee ?? fee.admissionFee],
   ]);
   if (voucherLines.length === 0) return null;
 

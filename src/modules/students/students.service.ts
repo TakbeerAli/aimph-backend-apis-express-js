@@ -38,7 +38,15 @@ function newStudentDoc(
   admissionNo: number,
 ): Partial<StudentAttrs> {
   const admissionDate = input.admissionDate ?? today();
-  const { _id, classId, sectionId, rollNo, admissionNo: _given, ...personal } = input;
+  const {
+    _id,
+    classId,
+    sectionId,
+    rollNo,
+    admissionNo: _given,
+    admissionFees: _fees,
+    ...personal
+  } = input;
   const placement = { sessionId, classId, sectionId, ...(rollNo !== undefined && { rollNo }) };
   return {
     ...(_id && { _id }),
@@ -106,7 +114,13 @@ export async function admitStudent(user: AuthUser, input: AdmitStudentInput): Pr
       { session },
     );
     if (!student) throw new Error('Student was not created');
-    const voucher = await createAdmissionVoucher(user, student, currentSession, session);
+    const voucher = await createAdmissionVoucher(
+      user,
+      student,
+      currentSession,
+      session,
+      input.admissionFees,
+    );
 
     await writeAudit(session, {
       action: 'STUDENT_CREATE',
@@ -120,6 +134,7 @@ export async function admitStudent(user: AuthUser, input: AdmitStudentInput): Pr
         current: student.current,
         voucherNo: voucher?.voucherNo ?? null,
         charged: voucher?.totalAmount ?? 0,
+        ...(input.admissionFees && { feesChangedTo: input.admissionFees }),
       },
     });
     return { student, voucher, duplicate: false };

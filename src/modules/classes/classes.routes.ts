@@ -11,7 +11,8 @@ import {
   updateSectionBody,
 } from './classes.schemas.js';
 
-// Mounted behind requireAuth in app.ts. Classes are never deleted, only deactivated.
+// Mounted behind requireAuth in app.ts. Classes are never deleted, only deactivated. A section
+// can be deleted; one with old records is hidden instead (see deleteSection).
 export const classesRouter = Router();
 const admin = requireRole('ADMIN');
 
@@ -34,4 +35,10 @@ classesRouter.patch(
   admin,
   validate({ params: sectionParams, body: updateSectionBody }),
   controller.updateSection,
+);
+classesRouter.delete(
+  '/:id/sections/:sectionId',
+  admin,
+  validate({ params: sectionParams }),
+  controller.deleteSection,
 );

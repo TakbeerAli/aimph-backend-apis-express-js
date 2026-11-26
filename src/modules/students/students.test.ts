@@ -76,6 +76,33 @@ describe('students', () => {
       expect(await AuditLog.countDocuments({ action: 'STUDENT_CREATE' })).toBe(1);
     });
 
+    it('charges the admission voucher with amounts the Admin changed, or none', async () => {
+      const changed = await as(adminTokens).post(
+        api,
+        studentBody(in5A, { admissionFees: { tuitionFee: 1500, admissionFee: 0 } }),
+      );
+      expect(changed.status).toBe(201);
+      const { voucher, student } = changed.body.data;
+      expect(voucher.lines).toEqual([
+        expect.objectContaining({ code: 'TUITION', amount: 1500 }),
+      ]);
+      expect(voucher.totalAmount).toBe(1500);
+      expect(student).not.toHaveProperty('admissionFees');
+
+      const free = await as(adminTokens).post(
+        api,
+        studentBody(in5A, { admissionFees: { tuitionFee: 0, admissionFee: 0 } }),
+      );
+      expect(free.status).toBe(201);
+      expect(free.body.data.voucher).toBeNull();
+
+      const bad = await as(adminTokens).post(
+        api,
+        studentBody(in5A, { admissionFees: { tuitionFee: -1, admissionFee: 0 } }),
+      );
+      expect(bad.status).toBe(400);
+    });
+
     it('Staff cannot admit students', async () => {
       expect((await as(staffTokens).post(api, studentBody(in5A))).status).toBe(403);
     });

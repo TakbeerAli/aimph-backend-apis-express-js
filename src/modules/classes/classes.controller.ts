@@ -28,6 +28,14 @@ export async function addSection(req: Request<{ id: string }>, res: Response): P
   sendData(res, await classesService.addSection(authUser(req), req.params.id, body), 201);
 }
 
+export async function deleteSection(
+  req: Request<{ id: string; sectionId: string }>,
+  res: Response,
+): Promise<void> {
+  const { id, sectionId } = req.params;
+  sendData(res, await classesService.deleteSection(authUser(req), id, sectionId));
+}
+
 export async function updateSection(
   req: Request<{ id: string; sectionId: string }>,
   res: Response,

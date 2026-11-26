@@ -10,6 +10,7 @@ import {
   type Tokens,
 } from '../../../test/helpers.js';
 import { createApp } from '../../app.js';
+import { Student } from '../students/students.model.js';
 import { SchoolClass } from './classes.model.js';
 
 const api = '/api/v1/classes';
@@ -34,6 +35,7 @@ describe('classes and sections', () => {
       request(app).post(path).set('Authorization', bearer(tokens)).send(body),
     patch: (path: string, body: object) =>
       request(app).patch(path).set('Authorization', bearer(tokens)).send(body),
+    delete: (path: string) => request(app).delete(path).set('Authorization', bearer(tokens)),
   });
 
   it('lists classes by sortOrder with active student counts', async () => {
@@ -119,5 +121,33 @@ describe('classes and sections', () => {
     expect(cls.status).toBe(409);
     expect(section.status).toBe(409);
     expect(emptySection.status).toBe(200);
+  });
+
+  it('deletes an unused section, hides one with old records, refuses one with active students', async () => {
+    const added = await as(adminTokens).post(`${api}/${school.class5Id}/sections`, { name: 'C' });
+    const sC = added.body.data.sections.find((x: { name: string }) => x.name === 'C')._id;
+    const path = (sectionId: string) => `${api}/${school.class5Id}/sections/${sectionId}`;
+
+    expect((await as(staffTokens).delete(path(sC))).status).toBe(403);
+
+    const removed = await as(adminTokens).delete(path(sC));
+    expect(removed.status).toBe(200);
+    expect(removed.body.data.deleted).toBe(true);
+    const after = await SchoolClass.findById(school.class5Id);
+    expect(after?.sections.map((x) => x.name)).toEqual(['A', 'B']);
+
+    const student = await admit(school.actor, { classId: school.class5Id, sectionId: school.s5B });
+    const busy = await as(adminTokens).delete(path(school.s5B));
+    expect(busy.status).toBe(409);
+
+    // A student who has left still points at the section: it is hidden, not removed.
+    await Student.updateOne({ _id: student._id }, { $set: { status: 'WITHDRAWN' } });
+    const hidden = await as(adminTokens).delete(path(school.s5B));
+    expect(hidden.status).toBe(200);
+    expect(hidden.body.data.deleted).toBe(false);
+    const cls = await SchoolClass.findById(school.class5Id);
+    expect(cls?.sections.find((x) => x._id === school.s5B)?.isActive).toBe(false);
+
+    expect((await as(adminTokens).delete(path('missing'))).status).toBe(404);
   });
 });
