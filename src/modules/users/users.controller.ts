@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express';
 import { authUser } from '../../common/middleware/auth.js';
 import { sendData } from '../../common/respond.js';
-import type { CreateUserInput, ListUsersQuery, UpdateUserInput } from './users.schemas.js';
+import type { CreateTeacherInput, ListUsersQuery, UpdateTeacherInput } from './users.schemas.js';
 import * as usersService from './users.service.js';
 
 type IdParams = { id: string };
@@ -10,14 +10,18 @@ export async function list(req: Request, res: Response): Promise<void> {
   sendData(res, await usersService.listUsers(req.query as unknown as ListUsersQuery));
 }
 
-export async function create(req: Request, res: Response): Promise<void> {
-  const user = await usersService.createStaff(authUser(req), req.body as CreateUserInput);
+export async function listTeachers(_req: Request, res: Response): Promise<void> {
+  sendData(res, await usersService.listTeachers());
+}
+
+export async function createTeacher(req: Request, res: Response): Promise<void> {
+  const user = await usersService.createTeacher(authUser(req), req.body as CreateTeacherInput);
   sendData(res, user, 201);
 }
 
-export async function update(req: Request<IdParams>, res: Response): Promise<void> {
-  const body = req.body as UpdateUserInput;
-  sendData(res, await usersService.updateUser(authUser(req), req.params.id, body));
+export async function updateTeacher(req: Request<IdParams>, res: Response): Promise<void> {
+  const body = req.body as UpdateTeacherInput;
+  sendData(res, await usersService.updateTeacher(authUser(req), req.params.id, body));
 }
 
 export async function resetPassword(req: Request<IdParams>, res: Response): Promise<void> {

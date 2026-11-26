@@ -86,7 +86,7 @@ export async function dailyCollection(
 ): Promise<DailyCollection> {
   const match = {
     paidAt: dayRange(date),
-    ...(user.role === 'STAFF' && { receivedBy: user.id }),
+    ...(user.role === 'TEACHER' && { receivedBy: user.id }),
   };
 
   const [summary, staffRows, receipts] = await Promise.all([

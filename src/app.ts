@@ -25,7 +25,7 @@ import { dashboardRouter } from './modules/dashboard/dashboard.routes.js';
 import { reportsRouter } from './modules/reports/reports.routes.js';
 import { setupRouter } from './modules/setup/setup.routes.js';
 import { syncRouter } from './modules/sync/sync.routes.js';
-import { usersRouter } from './modules/users/users.routes.js';
+import { teachersRouter, usersRouter } from './modules/users/users.routes.js';
 
 export function createApp(): Express {
   const app = express();
@@ -63,6 +63,7 @@ export function createApp(): Express {
   api.use('/health', healthRouter);
   api.use('/auth', createAuthRouter({ login: createLoginLimiter(), api: apiLimiter }));
   api.use('/users', ...authed, usersRouter);
+  api.use('/teachers', ...authed, teachersRouter);
   api.use('/settings', ...authed, settingsRouter);
   api.use('/sessions', ...authed, sessionsRouter);
   api.use('/classes', ...authed, classesRouter);

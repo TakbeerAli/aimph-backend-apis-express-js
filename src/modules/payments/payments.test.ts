@@ -54,12 +54,12 @@ describe('payments', () => {
     staff1 = await createUser({
       username: 'staff1',
       deviceCode: 'S1',
-      assignedClassIds: [school.class5Id],
+      assignedSectionIds: [school.s5A, school.s5B],
     });
     staff2 = await createUser({
       username: 'staff2',
       deviceCode: 'S2',
-      assignedClassIds: [school.class5Id],
+      assignedSectionIds: [school.s5A, school.s5B],
     });
     adminTokens = await login(app, school.admin);
     staff1Tokens = await login(app, staff1);
@@ -230,11 +230,11 @@ describe('payments', () => {
       expect(res.body.error.code).toBe('DUPLICATE_RECEIPT');
     });
 
-    it('Staff cannot collect for a class not assigned to them (#9)', async () => {
+    it('a teacher cannot collect for a student outside their sections (#9)', async () => {
       const other = await createUser({
         username: 'staff3',
         deviceCode: 'S3',
-        assignedClassIds: [school.class6Id],
+        assignedSectionIds: [school.s6A],
       });
       const res = await pay(
         await login(app, other),
@@ -242,7 +242,7 @@ describe('payments', () => {
       );
 
       expect(res.status).toBe(403);
-      expect(res.body.error.code).toBe('CLASS_NOT_ASSIGNED');
+      expect(res.body.error.code).toBe('SECTION_NOT_ASSIGNED');
       expect(await Payment.countDocuments()).toBe(0);
     });
 
@@ -590,7 +590,7 @@ describe('payments', () => {
     });
 
     it('Staff without the class see only their own payments in fee history', async () => {
-      await User.updateOne({ _id: staff1._id }, { $set: { assignedClassIds: [school.class6Id] } });
+      await User.updateOne({ _id: staff1._id }, { $set: { assignedSectionIds: [school.s6A] } });
       const res = await get(staff1Tokens, `/api/v1/students/${ali._id}/fee-history`);
       expect(res.body.data.payments.map((p: { receiptNo: string }) => p.receiptNo)).toEqual([
         'R-S1-00001',

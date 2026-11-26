@@ -19,7 +19,8 @@
     "test:watch": "vitest",
     "create-admin": "tsx scripts/create-admin.ts",
     "seed": "tsx scripts/seed.ts",
-    "migrate:admission-class": "tsx scripts/backfill-admission-class.ts"
+    "migrate:admission-class": "tsx scripts/backfill-admission-class.ts",
+    "migrate:teachers": "tsx scripts/migrate-teachers.ts"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

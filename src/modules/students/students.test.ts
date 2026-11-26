@@ -83,9 +83,7 @@ describe('students', () => {
       );
       expect(changed.status).toBe(201);
       const { voucher, student } = changed.body.data;
-      expect(voucher.lines).toEqual([
-        expect.objectContaining({ code: 'TUITION', amount: 1500 }),
-      ]);
+      expect(voucher.lines).toEqual([expect.objectContaining({ code: 'TUITION', amount: 1500 })]);
       expect(voucher.totalAmount).toBe(1500);
       expect(student).not.toHaveProperty('admissionFees');
 

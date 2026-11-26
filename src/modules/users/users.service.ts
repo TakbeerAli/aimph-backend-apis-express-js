@@ -8,12 +8,12 @@ import {
   toMongoSort,
   type PageResult,
 } from '../../common/utils/pagination.js';
+import { allocateSyncSeq } from '../../db/counters.js';
 import { withTransaction } from '../../db/transaction.js';
 import { hashPassword } from '../auth/password.js';
 import { SchoolClass } from '../classes/classes.model.js';
-import { assertClassesExist } from '../classes/classes.service.js';
 import { User, type UserDoc } from './users.model.js';
-import type { CreateUserInput, ListUsersQuery, UpdateUserInput } from './users.schemas.js';
+import type { CreateTeacherInput, ListUsersQuery, UpdateTeacherInput } from './users.schemas.js';
 
 async function findUserOrThrow(id: string, session: ClientSession): Promise<UserDoc> {
   const user = await User.findById(id).session(session);
@@ -29,53 +29,111 @@ export async function listUsers(query: ListUsersQuery): Promise<PageResult<UserD
   return pageResult(items, total, query);
 }
 
-/**
- * A class belongs to at most one Staff user, so two phones never collect for the same class.
- * Throws CONFLICT naming the class and its current owner.
- */
-async function assertClassesFree(
-  classIds: string[],
-  exceptUserId: string | null,
-  session: ClientSession,
-): Promise<void> {
-  if (classIds.length === 0) return;
-  const owners = await User.find(
-    {
-      role: 'STAFF',
-      isActive: true,
-      assignedClassIds: { $in: classIds },
-      ...(exceptUserId && { _id: { $ne: exceptUserId } }),
-    },
-    { fullName: 1, assignedClassIds: 1 },
-  ).session(session);
-  const owner = owners[0];
-  if (!owner) return;
-  const takenId = classIds.find((id) => owner.assignedClassIds.includes(id));
-  const cls = await SchoolClass.findById(takenId, { name: 1 }).session(session);
-  throw new AppError(
-    'CONFLICT',
-    `${cls?.name ?? 'A class'} is already assigned to ${owner.fullName}. A class can belong to only one staff member.`,
-    { classId: takenId, userId: owner._id },
+/* ---------- Sections ---------- */
+
+export interface SectionInfo {
+  classId: string;
+  sectionId: string;
+  /** "5-A" (the class short name when it has one). */
+  label: string;
+}
+
+/** Every active section of every active class, in class order. */
+export async function activeSections(session?: ClientSession | null): Promise<SectionInfo[]> {
+  const classes = await SchoolClass.find({ isActive: true })
+    .sort({ sortOrder: 1 })
+    .session(session ?? null);
+  return classes.flatMap((cls) =>
+    cls.sections
+      .filter((s) => s.isActive)
+      .map((s) => ({
+        classId: cls._id,
+        sectionId: s._id,
+        label: `${cls.shortName ?? cls.name}-${s.name}`,
+      })),
   );
 }
 
-/** Admin creates a Staff user. The single Admin is created with scripts/create-admin.ts. */
-export async function createStaff(admin: AuthUser, input: CreateUserInput): Promise<UserDoc> {
+/** Rejects ids that are not active sections. */
+async function assertSectionsExist(sectionIds: string[], session: ClientSession) {
+  if (sectionIds.length === 0) return;
+  const known = new Set((await activeSections(session)).map((s) => s.sectionId));
+  if (sectionIds.some((id) => !known.has(id))) {
+    throw new AppError('VALIDATION_ERROR', 'One or more sections do not exist or are not active.');
+  }
+}
+
+/**
+ * A section belongs to at most one active teacher. Throws SECTION_ALREADY_ASSIGNED naming the
+ * section and its teacher.
+ */
+async function assertSectionsFree(
+  sectionIds: string[],
+  exceptUserId: string | null,
+  session: ClientSession,
+): Promise<void> {
+  if (sectionIds.length === 0) return;
+  const owner = await User.findOne(
+    {
+      role: 'TEACHER',
+      isActive: true,
+      assignedSectionIds: { $in: sectionIds },
+      ...(exceptUserId && { _id: { $ne: exceptUserId } }),
+    },
+    { fullName: 1, assignedSectionIds: 1 },
+  ).session(session);
+  if (!owner) return;
+  const takenId = sectionIds.find((id) => owner.assignedSectionIds.includes(id));
+  const label =
+    (await activeSections(session)).find((s) => s.sectionId === takenId)?.label ?? 'A section';
+  throw new AppError(
+    'SECTION_ALREADY_ASSIGNED',
+    `${label} is already assigned to ${owner.fullName}. Remove it from that teacher first.`,
+    { sectionId: takenId, section: label, teacherId: owner._id, teacher: owner.fullName },
+  );
+}
+
+/* ---------- Teachers ---------- */
+
+export interface TeacherList {
+  items: UserDoc[];
+  /** Active sections no active teacher has: only the Admin can collect or mark there. */
+  unassignedSections: SectionInfo[];
+}
+
+export async function listTeachers(): Promise<TeacherList> {
+  const [items, sections] = await Promise.all([
+    User.find({ role: 'TEACHER' }).sort({ isActive: -1, deviceCode: 1 }),
+    activeSections(),
+  ]);
+  const taken = new Set(items.filter((t) => t.isActive).flatMap((t) => t.assignedSectionIds));
+  return { items, unassignedSections: sections.filter((s) => !taken.has(s.sectionId)) };
+}
+
+/** Next free teacher phone code: T01, T02 … (T100 after T99). */
+async function nextTeacherCode(session: ClientSession): Promise<string> {
+  const users = await User.find({ deviceCode: /^T\d+$/ }, { deviceCode: 1 }).session(session);
+  const max = users.reduce((n, u) => Math.max(n, Number(u.deviceCode.slice(1))), 0);
+  return `T${String(max + 1).padStart(2, '0')}`;
+}
+
+/** Admin creates a teacher; the phone code is given automatically. */
+export async function createTeacher(admin: AuthUser, input: CreateTeacherInput): Promise<UserDoc> {
   const passwordHash = await hashPassword(input.password);
   return withTransaction(async (session) => {
-    await assertClassesExist(input.assignedClassIds, session);
-    await assertClassesFree(input.assignedClassIds, null, session);
+    await assertSectionsExist(input.assignedSectionIds, session);
+    await assertSectionsFree(input.assignedSectionIds, null, session);
     const [user] = await User.create(
       [
         {
           fullName: input.fullName,
           username: input.username,
           passwordHash,
-          role: 'STAFF',
-          deviceCode: input.deviceCode,
+          role: 'TEACHER',
+          deviceCode: await nextTeacherCode(session),
           phone: input.phone ?? null,
-          assignedClassIds: input.assignedClassIds,
-          // The Admin chose this password, so the staff member replaces it at first sign-in.
+          assignedSectionIds: input.assignedSectionIds,
+          // The Admin chose this password, so the teacher replaces it at first sign-in.
           mustChangePassword: true,
           createdBy: admin.id,
         },
@@ -84,7 +142,7 @@ export async function createStaff(admin: AuthUser, input: CreateUserInput): Prom
     );
     if (!user) throw new Error('User was not created');
     await writeAudit(session, {
-      action: 'USER_CREATE',
+      action: 'TEACHER_CREATE',
       userId: admin.id,
       entity: 'user',
       entityId: user._id,
@@ -93,58 +151,94 @@ export async function createStaff(admin: AuthUser, input: CreateUserInput): Prom
         username: user.username,
         role: user.role,
         deviceCode: user.deviceCode,
-        assignedClassIds: user.assignedClassIds,
+        assignedSectionIds: user.assignedSectionIds,
       },
     });
     return user;
   });
 }
 
-export async function updateUser(
+export async function updateTeacher(
   admin: AuthUser,
   id: string,
-  input: UpdateUserInput,
+  input: UpdateTeacherInput,
 ): Promise<UserDoc> {
   if (id === admin.id && input.isActive === false) {
     throw new AppError('VALIDATION_ERROR', 'You cannot deactivate your own account.');
   }
   return withTransaction(async (session) => {
     const user = await findUserOrThrow(id, session);
-    if (input.assignedClassIds) {
-      await assertClassesExist(input.assignedClassIds, session);
-      if (user.role === 'STAFF') await assertClassesFree(input.assignedClassIds, user._id, session);
+    if (input.assignedSectionIds && user.role !== 'TEACHER') {
+      throw new AppError('VALIDATION_ERROR', 'Only teachers have sections.');
     }
-    // Turning a Staff user back on must not give two people the same class.
-    if (input.isActive === true && !user.isActive && user.role === 'STAFF') {
-      await assertClassesFree(input.assignedClassIds ?? user.assignedClassIds, user._id, session);
+    const sections = input.assignedSectionIds ?? user.assignedSectionIds;
+    if (input.assignedSectionIds) {
+      await assertSectionsExist(input.assignedSectionIds, session);
     }
+    // Checked when sections change, and when a teacher is turned back on.
+    const staysActive = input.isActive ?? user.isActive;
+    if (user.role === 'TEACHER' && staysActive && (input.assignedSectionIds || !user.isActive)) {
+      await assertSectionsFree(sections, user._id, session);
+    }
+
     const before = {
       fullName: user.fullName,
       isActive: user.isActive,
       phone: user.phone,
-      assignedClassIds: [...user.assignedClassIds],
+      assignedSectionIds: [...user.assignedSectionIds],
     };
 
-    user.set(input);
+    if (input.assignedSectionIds) {
+      const added = sections.filter((s) => !before.assignedSectionIds.includes(s));
+      const removed = before.assignedSectionIds.filter((s) => !sections.includes(s));
+      if (added.length > 0 || removed.length > 0) {
+        // A number between the phone's last pull and this change, so the next pull sees it.
+        const seq = await allocateSyncSeq(1, session);
+        if (added.length > 0) user.sectionsAddedSeq = seq;
+        user.revokedSections = [
+          ...user.revokedSections.filter((r) => !sections.includes(r.sectionId)),
+          ...removed.map((sectionId) => ({ sectionId, seq })),
+        ].slice(-100);
+      }
+    }
+
+    user.set({
+      ...(input.fullName !== undefined && { fullName: input.fullName }),
+      ...(input.isActive !== undefined && { isActive: input.isActive }),
+      ...(input.phone !== undefined && { phone: input.phone }),
+      ...(input.assignedSectionIds && { assignedSectionIds: input.assignedSectionIds }),
+    });
     // A deactivated user is logged out everywhere.
     if (input.isActive === false) user.refreshTokenHash = null;
     await user.save({ session });
 
-    const changes = diffFields(before, {
+    const after = {
       fullName: user.fullName,
       isActive: user.isActive,
       phone: user.phone,
-      assignedClassIds: [...user.assignedClassIds],
-    });
+      assignedSectionIds: [...user.assignedSectionIds],
+    };
+    const sectionsChanged =
+      JSON.stringify(before.assignedSectionIds) !== JSON.stringify(after.assignedSectionIds);
     await writeAudit(session, {
-      action: 'USER_UPDATE',
+      action: sectionsChanged ? 'SECTIONS_ASSIGN' : 'TEACHER_UPDATE',
       userId: admin.id,
       entity: 'user',
       entityId: user._id,
-      ...changes,
+      ...diffFields(before, after),
     });
     return user;
   });
+}
+
+/** Takes a deleted section away from every teacher (their phones drop its data). */
+export async function unassignSection(sectionId: string, session: ClientSession): Promise<void> {
+  const owners = await User.find({ assignedSectionIds: sectionId }).session(session);
+  for (const owner of owners) {
+    owner.assignedSectionIds = owner.assignedSectionIds.filter((s) => s !== sectionId);
+    owner.revokedSections.push({ sectionId, seq: await allocateSyncSeq(1, session) });
+    await owner.save({ session });
+  }
 }
 
 /**

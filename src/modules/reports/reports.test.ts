@@ -64,12 +64,12 @@ describe('reports and dashboard', () => {
     const s1 = await createUser({
       username: 'staff1',
       deviceCode: 'S1',
-      assignedClassIds: [school.class5Id],
+      assignedSectionIds: [school.s5A, school.s5B],
     });
     const s2 = await createUser({
       username: 'staff2',
       deviceCode: 'S2',
-      assignedClassIds: [school.class5Id],
+      assignedSectionIds: [school.s5A, school.s5B],
     });
     staff1 = asAuthUser(s1);
     staff2 = asAuthUser(s2);

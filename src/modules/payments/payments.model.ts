@@ -53,6 +53,8 @@ export interface PaymentAttrs extends SyncFields {
   deviceCode: string;
   studentId: string;
   classIdAtPayment: string;
+  /** The student's section when paid: teachers' phones get the payments of their sections. */
+  sectionIdAtPayment: string;
   amount: number;
   method: PaymentMethod;
   bankDate: Date | null;
@@ -92,6 +94,7 @@ const paymentSchema = new Schema<PaymentAttrs>(
     deviceCode: { type: String, required: true },
     studentId: { type: String, required: true },
     classIdAtPayment: { type: String, required: true },
+    sectionIdAtPayment: { type: String, required: true },
     amount: positiveMoney,
     method: { type: String, enum: PAYMENT_METHODS, required: true },
     bankDate: { type: Date, default: null },

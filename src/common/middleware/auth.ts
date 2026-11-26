@@ -9,7 +9,7 @@ export interface AuthUser {
   fullName: string;
   role: Role;
   deviceCode: string;
-  assignedClassIds: string[];
+  assignedSectionIds: string[];
 }
 
 declare module 'express-serve-static-core' {
@@ -30,7 +30,7 @@ export const requireAuth: RequestHandler = async (req, _res, next) => {
   const userId = await verifyAccessToken(header.slice('Bearer '.length));
 
   const user = await User.findById(userId)
-    .select('username fullName role deviceCode assignedClassIds isActive')
+    .select('username fullName role deviceCode assignedSectionIds isActive')
     .lean();
   if (!user?.isActive) {
     throw new AppError('UNAUTHORIZED', 'Your account is not active. Please log in again.');
@@ -42,7 +42,7 @@ export const requireAuth: RequestHandler = async (req, _res, next) => {
     fullName: user.fullName,
     role: user.role,
     deviceCode: user.deviceCode,
-    assignedClassIds: user.assignedClassIds,
+    assignedSectionIds: user.assignedSectionIds,
   };
   next();
 };

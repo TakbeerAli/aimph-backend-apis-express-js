@@ -7,6 +7,7 @@ import { createPaymentBody } from '../payments/payments.schemas.js';
 import { createPayment } from '../payments/payments.service.js';
 import { admitStudentBody, updateStudentBody } from '../students/students.schemas.js';
 import { admitStudent, updateStudent } from '../students/students.service.js';
+import { User } from '../users/users.model.js';
 import {
   SYNC_OPERATION_TYPES,
   updateStudentPayload,
@@ -153,6 +154,16 @@ export interface PullResult {
   changes: Record<PulledCollection, PulledDoc[]>;
   nextSince: number;
   hasMore: boolean;
+  /**
+   * Teacher: sections taken away since `since`. The phone deletes their local students,
+   * vouchers, payments (and attendance sheets).
+   */
+  revokedSectionIds: string[];
+  /**
+   * Teacher: a section was added since `since`; its older records were never sent to this
+   * phone, so it must pull again from 0.
+   */
+  resetRequired: boolean;
 }
 
 /**
@@ -164,6 +175,8 @@ function sources(user: AuthUser): {
   filter: mongo.Filter<PulledDoc>;
   projection?: Record<string, 0>;
 }[] {
+  const teacher = user.role === 'TEACHER';
+  const mine = { $in: user.assignedSectionIds };
   const all: {
     name: PulledCollection;
     filter: mongo.Filter<PulledDoc>;
@@ -171,19 +184,25 @@ function sources(user: AuthUser): {
   }[] = [
     { name: 'academic_sessions', filter: {} },
     { name: 'classes', filter: {} },
-    // Staff phones get all students and vouchers (read-only) so search works offline.
-    { name: 'students', filter: {} },
+    // A teacher's phone gets only their sections' students, vouchers and payments.
+    {
+      name: 'students',
+      filter: teacher
+        ? {
+            $or: [
+              { 'current.sectionId': mine },
+              // Moved to another section: sent once more so the phone sees it has left.
+              { 'classHistory.sectionChanges.fromSectionId': mine },
+            ],
+          }
+        : {},
+    },
     { name: 'fee_structures', filter: {} },
-    { name: 'vouchers', filter: {} },
+    { name: 'vouchers', filter: teacher ? { sectionId: mine } : {} },
     {
       name: 'payments',
-      // Staff: their own payments plus payments for students in their assigned classes.
-      filter:
-        user.role === 'STAFF'
-          ? {
-              $or: [{ receivedBy: user.id }, { classIdAtPayment: { $in: user.assignedClassIds } }],
-            }
-          : {},
+      // Teacher: their own receipts plus payments for students in their sections.
+      filter: teacher ? { $or: [{ receivedBy: user.id }, { sectionIdAtPayment: mine }] } : {},
     },
     // Counters are internal and never leave the server.
     { name: 'settings', filter: {}, projection: { counters: 0 } },
@@ -191,12 +210,35 @@ function sources(user: AuthUser): {
     {
       name: 'users',
       filter: { _id: user.id },
-      projection: { passwordHash: 0, refreshTokenHash: 0 },
+      projection: {
+        passwordHash: 0,
+        refreshTokenHash: 0,
+        sectionsAddedSeq: 0,
+        revokedSections: 0,
+      },
     },
-    // Certificates live only on the Admin phone; Staff phones never receive them.
+    // Certificates live only on the Admin phone; teachers' phones never receive them.
     { name: 'certificates', filter: {} },
   ];
   return user.role === 'ADMIN' ? all : all.filter((source) => source.name !== 'certificates');
+}
+
+/** Teacher only: sections removed or added since the phone's last pull. */
+async function sectionChanges(
+  user: AuthUser,
+  since: number,
+): Promise<Pick<PullResult, 'revokedSectionIds' | 'resetRequired'>> {
+  if (user.role !== 'TEACHER' || since === 0) {
+    return { revokedSectionIds: [], resetRequired: false };
+  }
+  const record = await User.findById(user.id, { sectionsAddedSeq: 1, revokedSections: 1 }).lean();
+  const revoked = (record?.revokedSections ?? [])
+    .filter((r) => r.seq > since && !user.assignedSectionIds.includes(r.sectionId))
+    .map((r) => r.sectionId);
+  return {
+    revokedSectionIds: [...new Set(revoked)],
+    resetRequired: (record?.sectionsAddedSeq ?? 0) > since,
+  };
 }
 
 /**
@@ -231,5 +273,6 @@ export async function pull(user: AuthUser, query: PullQuery): Promise<PullResult
     changes,
     nextSince: page.at(-1)?.doc.syncSeq ?? query.since,
     hasMore: merged.length > query.limit,
+    ...(await sectionChanges(user, query.since)),
   };
 }

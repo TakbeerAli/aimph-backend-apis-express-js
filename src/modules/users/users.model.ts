@@ -2,10 +2,11 @@ import mongoose, { Schema, type HydratedDocument } from 'mongoose';
 import { newId } from '../../common/utils/ids.js';
 import { syncPlugin, type SyncFields } from '../../db/syncPlugin.js';
 
-export const ROLES = ['ADMIN', 'STAFF'] as const;
+/** STAFF was renamed to TEACHER (scripts/migrate-teachers.ts converts old users). */
+export const ROLES = ['ADMIN', 'TEACHER'] as const;
 export type Role = (typeof ROLES)[number];
 
-/** Device codes appear in receipt numbers (`R-S1-00087`), so no dashes. */
+/** Device codes appear in receipt numbers (`R-T01-00087`), so no dashes. */
 export const DEVICE_CODE_REGEX = /^[A-Z][A-Z0-9]{0,4}$/;
 
 export interface UserAttrs extends SyncFields {
@@ -16,7 +17,15 @@ export interface UserAttrs extends SyncFields {
   role: Role;
   deviceCode: string;
   lastReceiptSeq: number;
-  assignedClassIds: string[];
+  /** Teacher: the class-sections they collect fees and mark attendance for. */
+  assignedSectionIds: string[];
+  /**
+   * Sync bookkeeping (never sent to phones). sectionsAddedSeq: when a section was last given
+   * to this teacher; their phone must pull again from 0 to get its older records.
+   * revokedSections: sections taken away, so the phone deletes their local data.
+   */
+  sectionsAddedSeq: number;
+  revokedSections: { sectionId: string; seq: number }[];
   isActive: boolean;
   /** Optional mobile number, for the Admin's reference. */
   phone: string | null;
@@ -49,7 +58,12 @@ const userSchema = new Schema<UserAttrs>(
       min: 0,
       validate: { validator: Number.isInteger, message: 'lastReceiptSeq must be an integer' },
     },
-    assignedClassIds: { type: [String], default: [] },
+    assignedSectionIds: { type: [String], default: [] },
+    sectionsAddedSeq: { type: Number, default: 0 },
+    revokedSections: {
+      type: [{ _id: false, sectionId: { type: String, required: true }, seq: Number }],
+      default: [],
+    },
     isActive: { type: Boolean, default: true },
     phone: { type: String, default: null, trim: true, maxlength: 25 },
     mustChangePassword: { type: Boolean, default: false },
@@ -62,9 +76,9 @@ const userSchema = new Schema<UserAttrs>(
     timestamps: true,
     versionKey: false,
     toJSON: {
-      // Hashes never leave the server, even when selected explicitly.
+      // Hashes and sync bookkeeping never leave the server, even when selected explicitly.
       transform: (_doc, ret) => {
-        const { passwordHash, refreshTokenHash, ...rest } = ret;
+        const { passwordHash, refreshTokenHash, sectionsAddedSeq, revokedSections, ...rest } = ret;
         return rest;
       },
     },

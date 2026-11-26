@@ -5,7 +5,7 @@ import { sendData } from '../../common/respond.js';
 import { pullQuery, pushBody, type PullQuery, type PushInput } from './sync.schemas.js';
 import * as syncService from './sync.service.js';
 
-// Mounted behind requireAuth in app.ts (inactive users are rejected there). Admin and Staff.
+// Mounted behind requireAuth in app.ts (inactive users are rejected there). Admin and teachers.
 export const syncRouter = Router();
 
 syncRouter.post('/push', validate({ body: pushBody }), async (req: Request, res: Response) => {

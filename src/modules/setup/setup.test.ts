@@ -116,24 +116,27 @@ describe('Admin set-up additions', () => {
     });
   });
 
-  describe('staff accounts', () => {
+  describe('teacher accounts', () => {
     const newStaff = (over: object = {}) =>
-      asAdmin('post', '/users').send({
+      asAdmin('post', '/teachers').send({
         fullName: 'Muhammad Asif',
         username: 'staff1',
         password: 'first-password',
-        deviceCode: 'S1',
         phone: '0300-0000000',
-        assignedClassIds: [school.class5Id],
+        assignedSectionIds: [school.s5A],
         ...over,
       });
 
-    it('a new staff member must change the password at first sign-in', async () => {
+    it('a new teacher must change the password at first sign-in', async () => {
       const res = await newStaff();
       expect(res.status).toBe(201);
-      expect(res.body.data).toMatchObject({ phone: '0300-0000000', mustChangePassword: true });
+      expect(res.body.data).toMatchObject({
+        phone: '0300-0000000',
+        mustChangePassword: true,
+        deviceCode: 'T01',
+      });
 
-      const tokens = await login(app, { username: 'staff1', deviceCode: 'S1' }, 'first-password');
+      const tokens = await login(app, { username: 'staff1', deviceCode: 'T01' }, 'first-password');
       const change = await request(app)
         .post('/api/v1/auth/change-password')
         .set('Authorization', bearer(tokens))
@@ -145,34 +148,17 @@ describe('Admin set-up additions', () => {
     it('resetting a password asks for a new one again', async () => {
       const created = await newStaff();
       await User.updateOne({ _id: created.body.data._id }, { mustChangePassword: false });
-      await asAdmin('post', `/users/${created.body.data._id}/reset-password`).send({
+      await asAdmin('post', `/teachers/${created.body.data._id}/reset-password`).send({
         newPassword: 'temporary-123',
       });
       expect((await User.findById(created.body.data._id))?.mustChangePassword).toBe(true);
     });
 
-    it('a class can belong to only one staff member', async () => {
-      expect((await newStaff()).status).toBe(201);
-      const second = await newStaff({ username: 'staff2', deviceCode: 'S2' });
-      expect(second.status).toBe(409);
-      expect(second.body.error.message).toBe(
-        'Class 5 is already assigned to Muhammad Asif. A class can belong to only one staff member.',
-      );
-
-      const other = await newStaff({
-        username: 'staff2',
-        deviceCode: 'S2',
-        assignedClassIds: [school.class6Id],
-      });
-      const move = await asAdmin('patch', `/users/${other.body.data._id}`).send({
-        assignedClassIds: [school.class6Id, school.class5Id],
-      });
-      expect(move.status).toBe(409);
-    });
-
     it('the mobile number can be changed or cleared', async () => {
       const created = await newStaff();
-      const res = await asAdmin('patch', `/users/${created.body.data._id}`).send({ phone: null });
+      const res = await asAdmin('patch', `/teachers/${created.body.data._id}`).send({
+        phone: null,
+      });
       expect(res.status).toBe(200);
       expect(res.body.data.phone).toBeNull();
     });

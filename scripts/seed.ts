@@ -32,7 +32,7 @@ import { withdrawStudent } from '../src/modules/students/students.lifecycle.js';
 import { Student } from '../src/modules/students/students.model.js';
 import { importStudents } from '../src/modules/students/students.service.js';
 import { User, type UserDoc } from '../src/modules/users/users.model.js';
-import { createStaff } from '../src/modules/users/users.service.js';
+import { createTeacher } from '../src/modules/users/users.service.js';
 import { generateVouchers } from '../src/modules/vouchers/vouchers.generate.js';
 import { Voucher } from '../src/modules/vouchers/vouchers.model.js';
 
@@ -188,7 +188,7 @@ const asAuthUser = (u: UserDoc): AuthUser => ({
   fullName: u.fullName,
   role: u.role,
   deviceCode: u.deviceCode,
-  assignedClassIds: u.assignedClassIds,
+  assignedSectionIds: u.assignedSectionIds,
 });
 
 const phone = () =>
@@ -289,8 +289,8 @@ async function main(): Promise<void> {
   const password = process.env.SEED_PASSWORD ?? null;
   const passwords = {
     admin: password ?? randomBytes(9).toString('base64url'),
-    staff1: password ?? randomBytes(9).toString('base64url'),
-    staff2: password ?? randomBytes(9).toString('base64url'),
+    teacher1: password ?? randomBytes(9).toString('base64url'),
+    teacher2: password ?? randomBytes(9).toString('base64url'),
   };
   if (currentFeeMonth() < '2026-11') {
     throw new Error('The seed data runs until November 2026; run it on or after 1 Nov 2026.');
@@ -346,28 +346,28 @@ async function main(): Promise<void> {
       next = created._id;
     }
 
-    // Staff: staff1 collects for Playgroup–Class 4, staff2 for Class 5–10.
-    const classIds = classes.map((c) => c._id);
+    // Teachers (phone codes T01, T02): teacher1 has the sections of Playgroup–Class 4,
+    // teacher2 those of Class 5–10.
+    const sectionsOf = (list: typeof classes) =>
+      list.flatMap((c) => c.sections.filter((s) => s.isActive).map((s) => s._id));
     const staff1 = asAuthUser(
-      await createStaff(admin, {
-        fullName: 'Staff One',
-        username: 'staff1',
-        password: passwords.staff1,
-        deviceCode: 'S1',
-        assignedClassIds: classIds.slice(0, 7),
+      await createTeacher(admin, {
+        fullName: 'Teacher One',
+        username: 'teacher1',
+        password: passwords.teacher1,
+        assignedSectionIds: sectionsOf(classes.slice(0, 7)),
       }),
     );
     const staff2 = asAuthUser(
-      await createStaff(admin, {
-        fullName: 'Staff Two',
-        username: 'staff2',
-        password: passwords.staff2,
-        deviceCode: 'S2',
-        assignedClassIds: classIds.slice(7),
+      await createTeacher(admin, {
+        fullName: 'Teacher Two',
+        username: 'teacher2',
+        password: passwords.teacher2,
+        assignedSectionIds: sectionsOf(classes.slice(7)),
       }),
     );
-    const collectorFor = (classId: string) =>
-      rand() < 0.1 ? admin : staff1.assignedClassIds.includes(classId) ? staff1 : staff2;
+    const collectorFor = (sectionId: string) =>
+      rand() < 0.1 ? admin : staff1.assignedSectionIds.includes(sectionId) ? staff1 : staff2;
 
     // Students (go-live import: no admission charge for existing students).
     const imported = await importStudents(admin, studentRows(classes));
@@ -468,7 +468,7 @@ async function main(): Promise<void> {
         const amount = paysFull ? voucher.balance : paysHalf ? Math.floor(voucher.balance / 2) : 0;
         if (amount > 0) {
           await pay(
-            collectorFor(student.current.classId),
+            collectorFor(student.current.sectionId),
             student._id,
             voucher._id,
             amount,
@@ -507,8 +507,8 @@ async function main(): Promise<void> {
     for (const v of aliOpen) console.log(`    ${v.feeMonth}  ${v.voucherNo}  balance ${v.balance}`);
     console.log('\n  Logins (shown once, store them safely):');
     console.log(`    admin  / ${passwords.admin}  (device A)`);
-    console.log(`    staff1 / ${passwords.staff1}  (device S1, Playgroup–Class 4)`);
-    console.log(`    staff2 / ${passwords.staff2}  (device S2, Class 5–10)\n`);
+    console.log(`    teacher1 / ${passwords.teacher1}  (device T01, Playgroup–Class 4)`);
+    console.log(`    teacher2 / ${passwords.teacher2}  (device T02, Class 5–10)\n`);
   } finally {
     await disconnectDb();
   }

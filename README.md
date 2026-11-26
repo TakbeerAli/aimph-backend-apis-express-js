@@ -4,7 +4,7 @@ REST API for the **Al-Mahdi School Fee Manager** Android app (AL-MAHDI PUBLIC HI
 Phase 1 covers **students** and **fees**. Each phone keeps its own SQLite copy and syncs with this API,
 which is the single source of truth.
 
-- 1 Admin, 2 Staff, up to 5,000+ students
+- 1 Admin, any number of Teachers (each owns one or more class-sections), up to 5,000+ students
 - Money is whole PKR (integers only)
 - Business dates (fee month, due date, "today") use **Asia/Karachi**; timestamps are stored in UTC
 
@@ -51,7 +51,7 @@ entry applies:
 - Sessions 2025-26 (closed) and **2026-27 (current)**
 - Playgroup, Nursery, Prep, Class 1–10, each with sections A and B, chained for promotion
 - 2026-27 fee structures (Class 5: tuition 2,500 / admission 5,000 / exam 500; Class 10 tuition 3,500)
-- Users `admin` (device `A`), `staff1` (`S1`, Playgroup–Class 4), `staff2` (`S2`, Class 5–10).
+- Users `admin` (device `A`), `teacher1` (`T01`, sections of Playgroup–Class 4), `teacher2` (`T02`, Class 5–10).
   Passwords come from `SEED_PASSWORD`, otherwise they are generated and **printed once**.
 - 60 students (Adm 1001–1060), one withdrawn with dues kept
 - Vouchers April–November 2026 (exam fee in November) and ~390 payments
@@ -121,17 +121,18 @@ Base path `/api/v1`, JSON only, `Authorization: Bearer <accessToken>`. Full list
 - Success: `{ "data": … }` · lists: `{ "data": { items, page, limit, total } }` (`?page=&limit=` up to 200, `?sort=field|-field`)
 - Error: `{ "error": { "code": "AMOUNT_EXCEEDS_BALANCE", "message": "…", "details": {} } }`
 
-| Area                 | Endpoints                                                                                           |
-| -------------------- | --------------------------------------------------------------------------------------------------- |
-| Auth                 | login, refresh (rotating), logout, me, change-password                                              |
-| Users (Admin)        | list, create Staff, update, reset password, sign out                                                |
-| Setup                | settings, sessions (+ set-current), classes and sections, fee structures (+ copy)                   |
-| Students             | search, profile, fee history, admit, edit (version), change section, withdraw, promote, import      |
-| Vouchers             | generate (+ preview), list (overdue filter), by number, fine, waive, cancel, opening balances       |
-| Payments             | collect (idempotent by `_id`), list, by receipt, reverse, needs-review, resolve                     |
-| Reports              | dashboard, daily collection, collection, class-wise, defaulters, status list, previous-session dues |
-| Sync                 | `POST /sync/push`, `GET /sync/pull?since=&limit=`                                                   |
-| Certificates (Admin) | settings (principal, signature/stamp upload), check, issue, list/search, detail, reprint, cancel    |
+| Area                 | Endpoints                                                                                              |
+| -------------------- | ------------------------------------------------------------------------------------------------------ |
+| Auth                 | login, refresh (rotating), logout, me, change-password                                                 |
+| Users (Admin)        | list, reset password, sign out                                                                         |
+| Teachers (Admin)     | list (+ sections without a teacher), create (phone code T01…), update sections/active, reset, sign out |
+| Setup                | settings, sessions (+ set-current), classes and sections, fee structures (+ copy)                      |
+| Students             | search, profile, fee history, admit, edit (version), change section, withdraw, promote, import         |
+| Vouchers             | generate (+ preview), list (overdue filter), by number, fine, waive, cancel, opening balances          |
+| Payments             | collect (idempotent by `_id`), list, by receipt, reverse, needs-review, resolve                        |
+| Reports              | dashboard, daily collection, collection, class-wise, defaulters, status list, previous-session dues    |
+| Sync                 | `POST /sync/push`, `GET /sync/pull?since=&limit=`                                                      |
+| Certificates (Admin) | settings (principal, signature/stamp upload), check, issue, list/search, detail, reprint, cancel       |
 
 ## How the important parts work
 
@@ -172,7 +173,19 @@ stores data only; the Admin phone renders and prints the PDF.
 - **Images:** signature and stamp photos (PNG/JPG, max 2 MB, magic bytes checked) are cleaned with sharp
   (rotate, trim, paper made transparent, max 900 px wide) and uploaded to Cloudinary under an unguessable key.
   Old files are never deleted, because old certificates point at them.
-- **Sync:** certificates go only to the Admin phone; Staff never receive them.
+- **Sync:** certificates go only to the Admin phone; teachers never receive them.
+
+## Teachers and sections (Attendance module, stage B1)
+
+- Roles are **ADMIN** and **TEACHER** (STAFF was renamed). A teacher is given class-sections; each section belongs
+  to at most one active teacher (`409 SECTION_ALREADY_ASSIGNED`, naming the teacher).
+- A teacher collects fees only for students currently in their sections (`403 SECTION_NOT_ASSIGNED`).
+- New teachers get phone codes `T01`, `T02` … (receipts `R-T01-00001`). Existing `S1`/`S2` users keep their codes.
+- Sync: a teacher's phone pulls only their sections' students, vouchers and payments. The pull also returns
+  `revokedSectionIds` (delete that local data) and `resetRequired` (a section was added: pull again from 0).
+- Upgrading existing data: `npm run migrate:teachers -- --dry-run`, then `npm run migrate:teachers`
+  (STAFF → TEACHER, assigned classes → their active sections, section on old payments). **Run it right after
+  deploying**: payments now require `sectionIdAtPayment`.
 
 ## Project structure
 
@@ -196,7 +209,7 @@ Controllers stay thin; all business logic lives in services.
 1. Deploy (below) and run `npm run create-admin -- --username admin --name "…"` against the production database.
 2. Log in as Admin: update **settings**, create the session (the first one becomes current), create **classes and
    sections**, set **fee structures**.
-3. Create the two **Staff** users with their device codes (`S1`, `S2`) and assigned classes.
+3. Create the **teachers** (`POST /teachers`) with their sections; phone codes `T01`, `T02` … are given automatically.
 4. **Import** existing students (`POST /students/import`, all-or-nothing, errors listed per row).
 5. Enter each student's current dues from the paper registers as **opening balances** (`POST /vouchers/opening-balances`).
 6. **Generate** the month's vouchers (preview first).
@@ -244,6 +257,6 @@ The app logs JSON to stdout (secrets redacted) and shuts down cleanly on SIGTERM
 - Inactive users are rejected on login, refresh and every request.
 - `helmet`, CORS allow-list, 1 MB JSON body limit (image uploads: one PNG/JPG up to 2 MB), rate limits (login: 5 failed tries per 15 min per IP + username;
   API: 300 requests/min per user).
-- Every input is validated with Zod (unknown fields dropped). Staff limits (own payments, assigned classes)
+- Every input is validated with Zod (unknown fields dropped). Teacher limits (own payments, own sections)
   are enforced in the services.
 - No stack traces in responses; the audit log is insert-only.

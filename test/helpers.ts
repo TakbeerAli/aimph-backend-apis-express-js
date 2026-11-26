@@ -34,19 +34,19 @@ export async function createUser(
     fullName: string;
     role: Role;
     deviceCode: string;
-    assignedClassIds: string[];
+    assignedSectionIds: string[];
     isActive: boolean;
     password: string;
   }> = {},
 ): Promise<UserDoc> {
-  const role = overrides.role ?? 'STAFF';
+  const role = overrides.role ?? 'TEACHER';
   return User.create({
     fullName: overrides.fullName ?? 'Test User',
     username: overrides.username ?? (role === 'ADMIN' ? 'admin' : 'staff1'),
     passwordHash: await hashPassword(overrides.password ?? PASSWORD),
     role,
     deviceCode: overrides.deviceCode ?? (role === 'ADMIN' ? 'A' : 'S1'),
-    assignedClassIds: overrides.assignedClassIds ?? [],
+    assignedSectionIds: overrides.assignedSectionIds ?? [],
     isActive: overrides.isActive ?? true,
   });
 }
@@ -78,7 +78,7 @@ export const asAuthUser = (user: UserDoc): AuthUser => ({
   fullName: user.fullName,
   role: user.role,
   deviceCode: user.deviceCode,
-  assignedClassIds: user.assignedClassIds,
+  assignedSectionIds: user.assignedSectionIds,
 });
 
 /**

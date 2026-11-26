@@ -153,11 +153,8 @@ async function createInTransaction(
 
   const student = await Student.findById(input.studentId).session(session);
   if (!student) throw new AppError('NOT_FOUND', 'Student not found.');
-  if (user.role === 'STAFF' && !user.assignedClassIds.includes(student.current.classId)) {
-    throw new AppError(
-      'CLASS_NOT_ASSIGNED',
-      'You can only collect fees for your assigned classes.',
-    );
+  if (user.role === 'TEACHER' && !user.assignedSectionIds.includes(student.current.sectionId)) {
+    throw new AppError('SECTION_NOT_ASSIGNED', 'This student is not in your sections.');
   }
 
   if (sumAmounts(input.allocations) !== input.amount) {
@@ -203,6 +200,7 @@ async function createInTransaction(
     deviceCode: user.deviceCode,
     studentId: student._id,
     classIdAtPayment: student.current.classId,
+    sectionIdAtPayment: student.current.sectionId,
     amount: input.amount,
     method: input.method,
     bankDate: input.bankDate ?? null,
@@ -417,10 +415,10 @@ export async function resolvePayment(
   });
 }
 
-/* ---------- Reading payments (Staff see only their own) ---------- */
+/* ---------- Reading payments (teachers see only their own) ---------- */
 
 const ownOnly = (user: AuthUser): QueryFilter<PaymentAttrs> =>
-  user.role === 'STAFF' ? { receivedBy: user.id } : {};
+  user.role === 'TEACHER' ? { receivedBy: user.id } : {};
 
 export async function listPayments(
   user: AuthUser,
@@ -438,8 +436,8 @@ export async function listPayments(
       ...(query.to && { $lt: businessDayEnd(query.to) }),
     };
   }
-  // Staff: both conditions must hold, so asking for someone else's payments finds nothing.
-  if (user.role === 'STAFF') filter.$and = [ownOnly(user)];
+  // Teacher: both conditions must hold, so asking for someone else's payments finds nothing.
+  if (user.role === 'TEACHER') filter.$and = [ownOnly(user)];
 
   const [items, total] = await Promise.all([
     Payment.find(filter).sort(toMongoSort(query.sort)).skip(skipFor(query)).limit(query.limit),
@@ -465,11 +463,13 @@ export async function listNeedsReview(): Promise<PaymentDoc[]> {
 }
 
 /**
- * Payments a user may see for a student's class: Admin all; Staff their own, plus all
- * payments for classes assigned to them (the same rule the sync pull uses).
+ * Payments a user may see for a student's section: Admin all; a teacher their own, plus all
+ * payments for their sections (the same rule the sync pull uses).
  */
-const visibleFor = (user: AuthUser, classId: string): QueryFilter<PaymentAttrs> =>
-  user.role === 'ADMIN' || user.assignedClassIds.includes(classId) ? {} : { receivedBy: user.id };
+const visibleFor = (user: AuthUser, sectionId: string): QueryFilter<PaymentAttrs> =>
+  user.role === 'ADMIN' || user.assignedSectionIds.includes(sectionId)
+    ? {}
+    : { receivedBy: user.id };
 
 /** GET /vouchers/:id: the voucher with the payments applied to it. */
 export async function paymentsForVoucher(
@@ -478,7 +478,7 @@ export async function paymentsForVoucher(
 ): Promise<PaymentDoc[]> {
   return Payment.find({
     'allocations.voucherId': voucher._id,
-    ...visibleFor(user, voucher.classId),
+    ...visibleFor(user, voucher.sectionId),
   }).sort({ paidAt: -1 });
 }
 
@@ -491,7 +491,9 @@ export async function studentFeeHistory(
   if (!student) throw new AppError('NOT_FOUND', 'Student not found.');
   const [vouchers, payments] = await Promise.all([
     Voucher.find({ studentId }).sort({ feeMonth: -1, createdAt: -1 }),
-    Payment.find({ studentId, ...visibleFor(user, student.current.classId) }).sort({ paidAt: -1 }),
+    Payment.find({ studentId, ...visibleFor(user, student.current.sectionId) }).sort({
+      paidAt: -1,
+    }),
   ]);
   return { vouchers, payments };
 }

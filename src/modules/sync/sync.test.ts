@@ -18,7 +18,8 @@ import { newId } from '../../common/utils/ids.js';
 import { Payment } from '../payments/payments.model.js';
 import type { StudentDoc } from '../students/students.model.js';
 import { Student } from '../students/students.model.js';
-import { updateStudent } from '../students/students.service.js';
+import { changeSection, updateStudent } from '../students/students.service.js';
+import { updateTeacher } from '../users/users.service.js';
 import { User, type UserDoc } from '../users/users.model.js';
 import { generateVouchers } from '../vouchers/vouchers.generate.js';
 import { Voucher } from '../vouchers/vouchers.model.js';
@@ -36,6 +37,8 @@ interface PullBody {
   changes: Record<string, { _id: string; syncSeq: number; [key: string]: unknown }[]>;
   nextSince: number;
   hasMore: boolean;
+  revokedSectionIds: string[];
+  resetRequired: boolean;
 }
 
 describe('sync', () => {
@@ -56,12 +59,12 @@ describe('sync', () => {
     staff1 = await createUser({
       username: 'staff1',
       deviceCode: 'S1',
-      assignedClassIds: [school.class5Id],
+      assignedSectionIds: [school.s5A, school.s5B],
     });
     staff2 = await createUser({
       username: 'staff2',
       deviceCode: 'S2',
-      assignedClassIds: [school.class6Id],
+      assignedSectionIds: [school.s6A],
     });
     adminTokens = await login(app, school.admin);
     staff1Tokens = await login(app, staff1);
@@ -127,16 +130,51 @@ describe('sync', () => {
       expect(nextSince).toBe(maxSeq);
     });
 
-    it('Staff get all students and vouchers but only their own and their classes payments', async () => {
+    it('a teacher gets only the students, vouchers and payments of their sections (#9)', async () => {
       const s1 = await pullAs(staff1Tokens);
-      expect(s1.changes.students).toHaveLength(2);
-      expect(s1.changes.vouchers).toHaveLength(2);
-      // Own payment + Admin's payment for a Class 5 student; not staff2's Class 6 payment.
+      expect(ids(s1.changes.students)).toEqual([ali._id]);
+      expect(s1.changes.vouchers?.map((v) => v.studentId)).toEqual([ali._id]);
+      // Own payment + Admin's payment for a 5-A student; not staff2's 6-A payment.
       expect(ids(s1.changes.payments)).toEqual([aliPayment, adminPaymentForAli].sort());
       expect(ids(s1.changes.users)).toEqual([staff1._id]);
+      // Everyone gets classes, sessions, fees and settings.
+      expect(s1.changes.classes).toHaveLength(2);
+      expect(JSON.stringify(s1)).not.toMatch(/revokedSections|sectionsAddedSeq/);
+      expect(s1).toMatchObject({ revokedSectionIds: [], resetRequired: false });
 
       const s2 = await pullAs(staff2Tokens);
+      expect(ids(s2.changes.students)).toEqual([bilal._id]);
       expect(ids(s2.changes.payments)).toEqual([bilalPayment]);
+    });
+
+    it('reports sections taken away, and asks for a full pull when one is added (#9)', async () => {
+      const { nextSince } = await pullAs(staff2Tokens);
+
+      await updateTeacher(school.actor, staff2._id, { assignedSectionIds: [] });
+      const revoked = await pullAs(staff2Tokens, nextSince);
+      expect(revoked).toMatchObject({ revokedSectionIds: [school.s6A], resetRequired: false });
+      // Reported once: later pulls do not repeat it.
+      expect((await pullAs(staff2Tokens, revoked.nextSince)).revokedSectionIds).toEqual([]);
+
+      await updateTeacher(school.actor, staff2._id, { assignedSectionIds: [school.s6A] });
+      const added = await pullAs(staff2Tokens, revoked.nextSince);
+      expect(added).toMatchObject({ revokedSectionIds: [], resetRequired: true });
+      // The full pull from 0 brings the section's older records.
+      expect(ids((await pullAs(staff2Tokens)).changes.students)).toEqual([bilal._id]);
+    });
+
+    it("a student moved out of a teacher's section is sent once so the phone sees it left", async () => {
+      const { nextSince } = await pullAs(staff1Tokens);
+      await changeSection(school.actor, ali._id, {
+        toSectionId: school.s5B,
+        reason: 'Parents asked',
+      });
+      await updateTeacher(school.actor, staff1._id, { assignedSectionIds: [school.s5A] });
+      const later = await pullAs(staff1Tokens, nextSince);
+      expect(later.changes.students?.[0]).toMatchObject({
+        _id: ali._id,
+        current: expect.objectContaining({ sectionId: school.s5B }),
+      });
     });
 
     it('pages by syncSeq without missing or repeating anything', async () => {
@@ -264,7 +302,7 @@ describe('sync', () => {
       const staff3 = await createUser({
         username: 'staff3',
         deviceCode: 'S3',
-        assignedClassIds: [school.class5Id],
+        assignedSectionIds: [school.s5A, school.s5B],
       });
       const both = [
         { voucherId: aug, amount: 2500 },
@@ -299,7 +337,7 @@ describe('sync', () => {
       ).toEqual([
         ['REJECTED', 'VALIDATION_ERROR'],
         ['REJECTED', 'VALIDATION_ERROR'],
-        ['REJECTED', 'CLASS_NOT_ASSIGNED'],
+        ['REJECTED', 'SECTION_NOT_ASSIGNED'],
         ['APPLIED', undefined],
       ]);
       expect(await Payment.countDocuments()).toBe(1);

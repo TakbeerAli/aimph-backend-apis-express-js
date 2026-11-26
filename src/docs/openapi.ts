@@ -45,10 +45,10 @@ import {
 } from '../modules/students/students.schemas.js';
 import { pullQuery, pushBody } from '../modules/sync/sync.schemas.js';
 import {
-  createUserBody,
+  createTeacherBody,
   listUsersQuery,
   resetPasswordBody,
-  updateUserBody,
+  updateTeacherBody,
 } from '../modules/users/users.schemas.js';
 import {
   cancelBody,
@@ -103,10 +103,22 @@ const routes: Route[] = [
   }),
 
   r('get', '/users', 'Users', 'List users', 'admin', { query: listUsersQuery }),
-  r('post', '/users', 'Users', 'Create a Staff user', 'admin', { body: createUserBody }),
-  r('patch', '/users/{id}', 'Users', 'Update name, active flag, assigned classes', 'admin', {
-    body: updateUserBody,
+  r('get', '/teachers', 'Teachers', 'Teachers, plus sections without a teacher', 'admin'),
+  r('post', '/teachers', 'Teachers', 'Create a teacher (phone code T01, T02 … is given)', 'admin', {
+    body: createTeacherBody,
   }),
+  r('patch', '/teachers/{id}', 'Teachers', 'Update name, active flag, sections', 'admin', {
+    body: updateTeacherBody,
+  }),
+  r(
+    'post',
+    '/teachers/{id}/reset-password',
+    'Teachers',
+    'Set a new password (logs the teacher out)',
+    'admin',
+    { body: resetPasswordBody },
+  ),
+  r('post', '/teachers/{id}/sign-out', 'Teachers', 'Sign the teacher out of their phone', 'admin'),
   r(
     'post',
     '/users/{id}/reset-password',
@@ -348,7 +360,7 @@ const routes: Route[] = [
   r('post', '/payments', 'Payments', 'Collect a payment (idempotent by _id)', 'any', {
     body: createPaymentBody,
   }),
-  r('get', '/payments', 'Payments', 'List payments (Staff: own only)', 'any', {
+  r('get', '/payments', 'Payments', 'List payments (teacher: own only)', 'any', {
     query: listPaymentsQuery,
   }),
   r('get', '/payments/needs-review', 'Payments', 'Payments waiting for review', 'admin'),
@@ -356,10 +368,10 @@ const routes: Route[] = [
     'get',
     '/payments/by-receipt/{receiptNo}',
     'Payments',
-    'Find by receipt number (Staff: own only)',
+    'Find by receipt number (teacher: own only)',
     'any',
   ),
-  r('get', '/payments/{id}', 'Payments', 'One payment (Staff: own only)', 'any'),
+  r('get', '/payments/{id}', 'Payments', 'One payment (teacher: own only)', 'any'),
   r('post', '/payments/{id}/reverse', 'Payments', 'Reverse a payment', 'admin', {
     body: reverseBody,
   }),
@@ -367,8 +379,8 @@ const routes: Route[] = [
     body: resolveBody,
   }),
 
-  r('get', '/dashboard', 'Reports', 'Dashboard (Staff: own totals)', 'any'),
-  r('get', '/reports/daily-collection', 'Reports', 'Collection for one day (Staff: own)', 'any', {
+  r('get', '/dashboard', 'Reports', 'Dashboard (teacher: own totals)', 'any'),
+  r('get', '/reports/daily-collection', 'Reports', 'Collection for one day (teacher: own)', 'any', {
     query: dailyCollectionQuery,
   }),
   r(
@@ -440,7 +452,7 @@ const errorResponse = {
 
 const ACCESS_NOTE: Record<Access, string> = {
   public: 'No login needed.',
-  any: 'Admin or Staff (Staff limits are applied by the server).',
+  any: 'Admin or Teacher (teacher limits are applied by the server).',
   admin: 'Admin only.',
 };
 

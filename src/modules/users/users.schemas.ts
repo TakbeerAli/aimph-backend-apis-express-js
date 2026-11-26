@@ -23,9 +23,9 @@ export const deviceCode = z
   .regex(DEVICE_CODE_REGEX, 'Use a short code like S1 (letters and numbers, max 5).');
 
 const id = z.string().min(1).max(64);
-const assignedClassIds = z
+const assignedSectionIds = z
   .array(id)
-  .max(50)
+  .max(100)
   .transform((ids) => [...new Set(ids)]);
 
 export const userIdParams = z.object({ id });
@@ -38,22 +38,22 @@ const phone = z
   .trim()
   .regex(/^\+?[0-9][0-9 -]{6,18}$/, 'Enter a valid phone number, e.g. 0300-0000000.');
 
-export const createUserBody = z.object({
+/** POST /teachers. The phone code (T01, T02 …) is given by the server. */
+export const createTeacherBody = z.object({
   fullName,
   username,
   password: newPassword,
-  deviceCode,
   phone: phone.optional(),
-  assignedClassIds: assignedClassIds.default([]),
+  assignedSectionIds: assignedSectionIds.default([]),
 });
 
-export const updateUserBody = z
-  .object({ fullName, isActive: z.boolean(), assignedClassIds, phone: phone.nullable() })
+export const updateTeacherBody = z
+  .object({ fullName, isActive: z.boolean(), assignedSectionIds, phone: phone.nullable() })
   .partial()
   .refine((body) => Object.keys(body).length > 0, { message: 'Nothing to update.' });
 
 export const resetPasswordBody = z.object({ newPassword });
 
 export type ListUsersQuery = z.infer<typeof listUsersQuery>;
-export type CreateUserInput = z.infer<typeof createUserBody>;
-export type UpdateUserInput = z.infer<typeof updateUserBody>;
+export type CreateTeacherInput = z.infer<typeof createTeacherBody>;
+export type UpdateTeacherInput = z.infer<typeof updateTeacherBody>;

@@ -4,6 +4,7 @@ import { AppError } from '../../common/errors.js';
 import type { AuthUser } from '../../common/middleware/auth.js';
 import { withTransaction } from '../../db/transaction.js';
 import { Student } from '../students/students.model.js';
+import { unassignSection } from '../users/users.service.js';
 import { Voucher } from '../vouchers/vouchers.model.js';
 import { SchoolClass, type ClassAttrs, type ClassDoc, type SectionAttrs } from './classes.model.js';
 import type {
@@ -243,6 +244,7 @@ export async function deleteSection(
     const before = { name: section.name, isActive: section.isActive };
     if (deleted) {
       cls.sections.pull({ _id: sectionId });
+      await unassignSection(sectionId, session);
     } else {
       section.isActive = false;
     }

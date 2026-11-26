@@ -25,19 +25,23 @@ export interface Dashboard {
 }
 
 /**
- * Admin: school totals. Staff: collections from their own receipts; pending, students and
- * defaulters for their assigned classes.
+ * Admin: school totals. Teacher: collections from their own receipts; pending, students and
+ * defaulters for their sections.
  */
 export async function getDashboard(user: AuthUser): Promise<Dashboard> {
-  const isStaff = user.role === 'STAFF';
-  const ownReceipts = isStaff ? { receivedBy: user.id } : {};
-  const inClasses = isStaff ? { $in: user.assignedClassIds } : null;
+  const isTeacher = user.role === 'TEACHER';
+  const ownReceipts = isTeacher ? { receivedBy: user.id } : {};
+  const inSections = isTeacher ? { $in: user.assignedSectionIds } : null;
   const date = todayString();
   const feeMonth = currentFeeMonth();
   const currentSession = await AcademicSession.findOne({ isCurrent: true }, { _id: 1 }).lean();
 
   const openInSession = currentSession
-    ? { ...OPEN_BALANCE, sessionId: currentSession._id, ...(inClasses && { classId: inClasses }) }
+    ? {
+        ...OPEN_BALANCE,
+        sessionId: currentSession._id,
+        ...(inSections && { sectionId: inSections }),
+      }
     : null;
 
   const [
@@ -58,7 +62,7 @@ export async function getDashboard(user: AuthUser): Promise<Dashboard> {
       : [],
     Student.countDocuments({
       status: 'ACTIVE',
-      ...(inClasses && { 'current.classId': inClasses }),
+      ...(inSections && { 'current.sectionId': inSections }),
     }),
     openInSession
       ? Voucher.distinct('studentId', { ...openInSession, dueDate: { $lt: today() } })

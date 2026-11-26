@@ -32,7 +32,7 @@ export async function setupStatus(): Promise<SetupStatus> {
     getSettings(),
     AcademicSession.findOne({ isCurrent: true }, { name: 1 }).lean(),
     SchoolClass.find({ isActive: true }, { sections: 1 }).lean(),
-    User.countDocuments({ role: 'STAFF', isActive: true }),
+    User.countDocuments({ role: 'TEACHER', isActive: true }),
     Student.countDocuments(),
     Voucher.countDocuments({ type: 'OPENING_BALANCE', status: { $ne: 'CANCELLED' } }),
   ]);
