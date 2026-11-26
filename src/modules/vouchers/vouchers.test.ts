@@ -370,7 +370,7 @@ describe('vouchers', () => {
     });
 
     it('the student list shows each student current-session dues', async () => {
-      const res = await as(staffTokens).get(`/api/v1/students?q=1001`);
+      const res = await as(adminTokens).get(`/api/v1/students?q=1001`);
       // Sep 2,500 + Nov 7,500 + Dec 2,500
       expect(res.body.data.items[0].currentDues).toBe(12500);
     });

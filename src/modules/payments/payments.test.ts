@@ -589,12 +589,11 @@ describe('payments', () => {
       ]);
     });
 
-    it('Staff without the class see only their own payments in fee history', async () => {
+    it('a teacher cannot open the fee history of a student outside their sections', async () => {
       await User.updateOne({ _id: staff1._id }, { $set: { assignedSectionIds: [school.s6A] } });
       const res = await get(staff1Tokens, `/api/v1/students/${ali._id}/fee-history`);
-      expect(res.body.data.payments.map((p: { receiptNo: string }) => p.receiptNo)).toEqual([
-        'R-S1-00001',
-      ]);
+      expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe('SECTION_NOT_ASSIGNED');
     });
   });
 });

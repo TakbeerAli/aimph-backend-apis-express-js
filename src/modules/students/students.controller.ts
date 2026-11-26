@@ -16,11 +16,14 @@ import * as studentsService from './students.service.js';
 type IdParams = { id: string };
 
 export async function list(req: Request, res: Response): Promise<void> {
-  sendData(res, await studentsService.listStudents(req.query as unknown as ListStudentsQuery));
+  sendData(
+    res,
+    await studentsService.listStudents(authUser(req), req.query as unknown as ListStudentsQuery),
+  );
 }
 
 export async function get(req: Request<IdParams>, res: Response): Promise<void> {
-  sendData(res, await studentsService.getStudent(req.params.id));
+  sendData(res, await studentsService.getStudent(authUser(req), req.params.id));
 }
 
 export async function withdraw(req: Request<IdParams>, res: Response): Promise<void> {

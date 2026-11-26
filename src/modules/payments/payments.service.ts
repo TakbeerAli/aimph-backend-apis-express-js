@@ -489,6 +489,9 @@ export async function studentFeeHistory(
 ): Promise<{ vouchers: VoucherDoc[]; payments: PaymentDoc[] }> {
   const student = await Student.findById(studentId, { current: 1 }).lean();
   if (!student) throw new AppError('NOT_FOUND', 'Student not found.');
+  if (user.role === 'TEACHER' && !user.assignedSectionIds.includes(student.current.sectionId)) {
+    throw new AppError('SECTION_NOT_ASSIGNED', 'This student is not in your sections.');
+  }
   const [vouchers, payments] = await Promise.all([
     Voucher.find({ studentId }).sort({ feeMonth: -1, createdAt: -1 }),
     Payment.find({ studentId, ...visibleFor(user, student.current.sectionId) }).sort({

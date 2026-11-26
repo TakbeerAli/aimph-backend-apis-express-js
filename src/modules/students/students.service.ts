@@ -142,11 +142,19 @@ export async function admitStudent(user: AuthUser, input: AdmitStudentInput): Pr
 }
 
 /** Students matching the filters; each has `currentDues` (owed on this session's vouchers). */
-export async function listStudents(query: ListStudentsQuery) {
+/** Admin: every student. Teacher: only students currently in their sections. */
+export async function listStudents(user: AuthUser, query: ListStudentsQuery) {
   const filter: QueryFilter<StudentAttrs> = {};
+  if (user.role === 'TEACHER') {
+    filter['current.sectionId'] = query.sectionId
+      ? user.assignedSectionIds.includes(query.sectionId)
+        ? query.sectionId
+        : { $in: [] }
+      : { $in: user.assignedSectionIds };
+  }
   if (query.status) filter.status = query.status;
   if (query.classId) filter['current.classId'] = query.classId;
-  if (query.sectionId) filter['current.sectionId'] = query.sectionId;
+  if (query.sectionId && user.role !== 'TEACHER') filter['current.sectionId'] = query.sectionId;
   if (query.q) {
     // Every word must appear somewhere in name, father's name, admission no. or phone.
     const words = query.q.toLowerCase().split(/\s+/).filter(Boolean).slice(0, 5);
@@ -179,7 +187,14 @@ export async function listStudents(query: ListStudentsQuery) {
   return pageResult(items, total, query);
 }
 
-export const getStudent = (id: string): Promise<StudentDoc> => findStudentOrThrow(id);
+/** A teacher may open only students currently in their sections. */
+export async function getStudent(user: AuthUser, id: string): Promise<StudentDoc> {
+  const student = await findStudentOrThrow(id);
+  if (user.role === 'TEACHER' && !user.assignedSectionIds.includes(student.current.sectionId)) {
+    throw new AppError('SECTION_NOT_ASSIGNED', 'This student is not in your sections.');
+  }
+  return student;
+}
 
 /**
  * Edits personal and guardian details. `version` must match the stored version, otherwise

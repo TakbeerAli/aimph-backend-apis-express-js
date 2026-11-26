@@ -196,34 +196,60 @@ describe('students', () => {
       ['0333-999', ['Bilal Ahmed']],
       ['ali raza', ['Ali Raza']], // every word must match
     ])('q=%s', async (q, expected) => {
-      const res = await as(staffTokens).get(`${api}?q=${encodeURIComponent(q)}`);
+      const res = await as(adminTokens).get(`${api}?q=${encodeURIComponent(q)}`);
       expect(res.status).toBe(200);
       expect(names(res)).toEqual(expected);
     });
 
     it('filters by class and status, and pages', async () => {
-      const byClass = await as(staffTokens).get(`${api}?classId=${school.class5Id}&sort=-fullName`);
+      const byClass = await as(adminTokens).get(`${api}?classId=${school.class5Id}&sort=-fullName`);
       expect(names(byClass)).toEqual(['Sara Khan', 'Ali Raza']);
 
-      const page2 = await as(staffTokens).get(`${api}?limit=2&page=2`);
+      const page2 = await as(adminTokens).get(`${api}?limit=2&page=2`);
       expect(page2.body.data).toMatchObject({ page: 2, limit: 2, total: 3 });
       expect(names(page2)).toEqual(['Bilal Ahmed']);
 
-      const withdrawn = await as(staffTokens).get(`${api}?status=WITHDRAWN`);
+      const withdrawn = await as(adminTokens).get(`${api}?status=WITHDRAWN`);
       expect(withdrawn.body.data.total).toBe(0);
     });
 
+    it('a teacher lists and opens only students in their own sections', async () => {
+      const teacher = await createUser({
+        username: 'saima',
+        deviceCode: 'T01',
+        assignedSectionIds: [school.s5A],
+      });
+      const tokens = await login(app, teacher);
+      const mine = await as(tokens).get(api);
+      const ali = await Student.findOne({ admissionNo: 1001 }).lean();
+      expect(
+        mine.body.data.items.every(
+          (s: { current: { sectionId: string } }) => s.current.sectionId === school.s5A,
+        ),
+      ).toBe(true);
+      expect(mine.body.data.total).toBeGreaterThan(0);
+      const elsewhere = await as(tokens).get(`${api}?sectionId=${school.s6A}`);
+      expect(elsewhere.body.data.total).toBe(0);
+      const other = await Student.findOne({ 'current.sectionId': { $ne: school.s5A } }).lean();
+      expect((await as(tokens).get(`${api}/${other?._id}`)).body.error.code).toBe(
+        'SECTION_NOT_ASSIGNED',
+      );
+      expect((await as(tokens).get(`${api}/${ali?._id}`)).status).toBe(
+        ali?.current.sectionId === school.s5A ? 200 : 403,
+      );
+    });
+
     it('treats regex characters in q as plain text', async () => {
-      const res = await as(staffTokens).get(`${api}?q=${encodeURIComponent('.*')}`);
+      const res = await as(adminTokens).get(`${api}?q=${encodeURIComponent('.*')}`);
       expect(res.body.data.total).toBe(0);
     });
 
     it('GET /students/:id returns the profile, or 404', async () => {
       const student = await Student.findOne({ admissionNo: 1001 }).lean();
-      const ok = await as(staffTokens).get(`${api}/${student?._id}`);
+      const ok = await as(adminTokens).get(`${api}/${student?._id}`);
       expect(ok.status).toBe(200);
       expect(ok.body.data.fullName).toBe('Ali Raza');
-      expect((await as(staffTokens).get(`${api}/missing`)).status).toBe(404);
+      expect((await as(adminTokens).get(`${api}/missing`)).status).toBe(404);
     });
   });
 
