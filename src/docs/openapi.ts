@@ -5,6 +5,7 @@ import {
   updateEventBody,
   weeklyOffBody,
 } from '../modules/calendar/calendar.schemas.js';
+import { saveSheetBody, sheetQuery } from '../modules/attendance/attendance.schemas.js';
 import { z } from 'zod';
 import { changePasswordBody, loginBody, refreshBody } from '../modules/auth/auth.schemas.js';
 import {
@@ -273,6 +274,26 @@ const routes: Route[] = [
     'admin',
     {
       query: deleteEventQuery,
+    },
+  ),
+  r(
+    'get',
+    '/attendance/sheet',
+    'Attendance',
+    'A section-day sheet, or a draft with everyone PRESENT; canEdit',
+    'any',
+    {
+      query: sheetQuery,
+    },
+  ),
+  r(
+    'put',
+    '/attendance/sheet',
+    'Attendance',
+    'Save a sheet (teacher: own sections, today; Admin past days need a reason)',
+    'any',
+    {
+      body: saveSheetBody,
     },
   ),
   r('get', '/settings/calendar', 'Calendar', 'Weekly off days', 'any'),

@@ -44,7 +44,11 @@ export type AuditAction =
   | 'CALENDAR_EVENT_CREATE'
   | 'CALENDAR_EVENT_UPDATE'
   | 'CALENDAR_EVENT_DELETE'
-  | 'WEEKLY_OFF_UPDATE';
+  | 'WEEKLY_OFF_UPDATE'
+  | 'ATTENDANCE_CREATE'
+  | 'ATTENDANCE_UPDATE'
+  | 'ATTENDANCE_ADMIN_CORRECTION'
+  | 'ATTENDANCE_CONFLICT';
 
 export interface AuditEntry {
   action: AuditAction;

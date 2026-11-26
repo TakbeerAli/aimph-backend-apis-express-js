@@ -325,3 +325,18 @@ export async function calendarRules(
   const { weeklyOffDays, events } = await loadCalendar(sessionId, session);
   return { weeklyOffDays, events: events.map(eventFields) };
 }
+
+/** The rules data for a date range, whatever session(s) it falls in. */
+export async function calendarRulesForRange(
+  from: string,
+  to: string,
+  session?: ClientSession | null,
+): Promise<{ weeklyOffDays: number[]; events: CalendarRuleEvent[] }> {
+  const [settings, events] = await Promise.all([
+    getSettings(session ?? undefined),
+    CalendarEvent.find({ isDeleted: false, startDate: { $lte: to }, endDate: { $gte: from } })
+      .sort({ startDate: 1 })
+      .session(session ?? null),
+  ]);
+  return { weeklyOffDays: [...settings.calendar.weeklyOffDays], events: events.map(eventFields) };
+}

@@ -3,6 +3,8 @@ import { z } from 'zod';
 import { AppError, type ErrorCode } from '../../common/errors.js';
 import { logger } from '../../common/logger.js';
 import type { AuthUser } from '../../common/middleware/auth.js';
+import { saveSheetBody } from '../attendance/attendance.schemas.js';
+import { saveSheet } from '../attendance/attendance.service.js';
 import { createPaymentBody } from '../payments/payments.schemas.js';
 import { createPayment } from '../payments/payments.service.js';
 import { admitStudentBody, updateStudentBody } from '../students/students.schemas.js';
@@ -67,6 +69,20 @@ async function applyOperation(user: AuthUser, op: SyncOperation): Promise<SyncRe
         opId: op.opId,
         status: result.duplicate ? 'DUPLICATE' : 'APPLIED',
         record: result.student.toJSON(),
+      };
+    }
+    case 'SAVE_ATTENDANCE': {
+      // Marked offline today; the same sheet id sent again is DUPLICATE.
+      const { sheet, status } = await saveSheet(user, saveSheetBody.parse(op.payload));
+      return {
+        opId: op.opId,
+        status:
+          status === 'DUPLICATE'
+            ? 'DUPLICATE'
+            : status === 'NEEDS_REVIEW'
+              ? 'NEEDS_REVIEW'
+              : 'APPLIED',
+        record: sheet.toJSON(),
       };
     }
     case 'UPDATE_STUDENT': {
@@ -142,6 +158,7 @@ const PULLED = [
   'users',
   'certificates',
   'calendar_events',
+  'attendance_sheets',
 ] as const;
 type PulledCollection = (typeof PULLED)[number];
 
@@ -222,6 +239,8 @@ function sources(user: AuthUser): {
     { name: 'certificates', filter: {} },
     // Holidays and make-up days, including deleted ones (isDeleted) so phones remove them.
     { name: 'calendar_events', filter: {} },
+    // Teacher: only their own sections' sheets.
+    { name: 'attendance_sheets', filter: teacher ? { sectionId: mine } : {} },
   ];
   return user.role === 'ADMIN' ? all : all.filter((source) => source.name !== 'certificates');
 }

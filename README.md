@@ -199,6 +199,24 @@ stores data only; the Admin phone renders and prints the PDF.
   with the dates; send `confirm=true` to go ahead (the attendance records are kept).
 - `GET /calendar?month=YYYY-MM` returns each day's type and the month's working-day count.
 
+## Daily attendance (Attendance module, stage B3)
+
+- One `attendance_sheets` document per section and day (`_id` is a UUID made on the phone; unique
+  `sectionId + date`), with an entry per enrolled student: PRESENT, ABSENT, LEAVE or LATE.
+- The students of a sheet are those in the section that day: from admission, not after withdrawal, section
+  changes from their date.
+- `GET /attendance/sheet?sectionId=&date=` returns the sheet, or a draft with everyone PRESENT, plus `canEdit`,
+  `reasonRequired` and `lockedReason`. `PUT /attendance/sheet` creates or updates it.
+- Teachers: own sections, today only (`422 ATTENDANCE_LOCKED` otherwise). Admin: any day up to today; a past day
+  needs a `reason`, and every change to it goes in the sheet's `changeLog`. Never on a weekend or holiday
+  (`422 NOT_A_WORKING_DAY`), never in the future.
+- Offline: sync push `SAVE_ATTENDANCE` (same payload). The same sheet id sent again is `DUPLICATE`. A second
+  sheet for the same section and day from the same user is merged; from someone else it is kept under
+  `conflicts` with `needsReview: true` for the Admin.
+- Calculation (`modules/attendance/attendance.rules.ts`, shared with the app): counted days are working days
+  with a sheet that has the student; weekends, holidays and not-marked days never count; LATE is present,
+  LEAVE is not; % = (PRESENT + LATE) ÷ counted, rounded, or "—" when nothing is counted.
+
 ## Project structure
 
 ```

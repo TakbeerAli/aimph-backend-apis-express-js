@@ -1,6 +1,11 @@
 import { z } from 'zod';
 
-export const SYNC_OPERATION_TYPES = ['CREATE_PAYMENT', 'CREATE_STUDENT', 'UPDATE_STUDENT'] as const;
+export const SYNC_OPERATION_TYPES = [
+  'CREATE_PAYMENT',
+  'CREATE_STUDENT',
+  'UPDATE_STUDENT',
+  'SAVE_ATTENDANCE',
+] as const;
 export type SyncOperationType = (typeof SYNC_OPERATION_TYPES)[number];
 
 /** One queued action from the phone's outbox. The payload is validated per type in the service. */

@@ -27,6 +27,7 @@ import { setupRouter } from './modules/setup/setup.routes.js';
 import { syncRouter } from './modules/sync/sync.routes.js';
 import { teachersRouter, usersRouter } from './modules/users/users.routes.js';
 import { calendarRouter } from './modules/calendar/calendar.routes.js';
+import { attendanceRouter } from './modules/attendance/attendance.routes.js';
 
 export function createApp(): Express {
   const app = express();
@@ -66,6 +67,7 @@ export function createApp(): Express {
   api.use('/users', ...authed, usersRouter);
   api.use('/teachers', ...authed, teachersRouter);
   api.use('/calendar', ...authed, calendarRouter);
+  api.use('/attendance', ...authed, attendanceRouter);
   api.use('/settings', ...authed, settingsRouter);
   api.use('/sessions', ...authed, sessionsRouter);
   api.use('/classes', ...authed, classesRouter);
