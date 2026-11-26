@@ -5,7 +5,14 @@ import {
   updateEventBody,
   weeklyOffBody,
 } from '../modules/calendar/calendar.schemas.js';
-import { saveSheetBody, sheetQuery } from '../modules/attendance/attendance.schemas.js';
+import {
+  monthQuery,
+  notMarkedQuery,
+  registerQuery,
+  saveSheetBody,
+  sheetQuery,
+  statusQuery,
+} from '../modules/attendance/attendance.schemas.js';
 import { z } from 'zod';
 import { changePasswordBody, loginBody, refreshBody } from '../modules/auth/auth.schemas.js';
 import {
@@ -295,6 +302,38 @@ const routes: Route[] = [
     {
       body: saveSheetBody,
     },
+  ),
+  r(
+    'get',
+    '/attendance/sections-status',
+    'Attendance',
+    'Dashboard for a day: present %, absent, marked x/y, sections',
+    'any',
+    { query: statusQuery },
+  ),
+  r(
+    'get',
+    '/attendance/not-marked',
+    'Attendance',
+    'Working days with no sheet (default: last 30 days)',
+    'any',
+    { query: notMarkedQuery },
+  ),
+  r(
+    'get',
+    '/attendance/student/{id}',
+    'Attendance',
+    "A student's month: %, counts and each day",
+    'any',
+    { query: monthQuery },
+  ),
+  r(
+    'get',
+    '/attendance/register',
+    'Attendance',
+    'Monthly register grid of a section with totals',
+    'any',
+    { query: registerQuery },
   ),
   r('get', '/settings/calendar', 'Calendar', 'Weekly off days', 'any'),
   r('patch', '/settings/calendar', 'Calendar', 'Set the weekly off days', 'admin', {

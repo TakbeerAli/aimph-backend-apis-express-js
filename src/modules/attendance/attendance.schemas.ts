@@ -22,3 +22,13 @@ export const saveSheetBody = z.object({
 
 export type SheetQuery = z.infer<typeof sheetQuery>;
 export type SaveSheetInput = z.infer<typeof saveSheetBody>;
+
+/* ---------- Reports (stage B4) ---------- */
+
+export const statusQuery = z.object({ date: ymd });
+export const notMarkedQuery = z.object({ from: ymd.optional(), to: ymd.optional() });
+export const studentMonthParams = z.object({ id });
+export const monthQuery = z.object({
+  month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Use the format YYYY-MM, e.g. 2026-11.'),
+});
+export const registerQuery = monthQuery.extend({ sectionId: id });

@@ -217,6 +217,20 @@ stores data only; the Admin phone renders and prints the PDF.
   with a sheet that has the student; weekends, holidays and not-marked days never count; LATE is present,
   LEAVE is not; % = (PRESENT + LATE) ÷ counted, rounded, or "—" when nothing is counted.
 
+## Attendance reports (stage B4)
+
+Admin sees every section; a teacher only their own (`403 SECTION_NOT_ASSIGNED` otherwise).
+
+- `GET /attendance/sections-status?date=` – dashboard: present % and absent count over the marked sections,
+  sections marked x of y, and each section with its teacher, students, counts and %. Sections with no students
+  are left out.
+- `GET /attendance/not-marked?from=&to=` – working days with no sheet, newest first (default: the last 30 days).
+- `GET /attendance/student/:id?month=YYYY-MM` – %, counts and every day of the month (type, marked, status,
+  future) for the profile tab. Totals stop at today.
+- `GET /attendance/register?sectionId=&month=YYYY-MM` – the monthly register: header (school, section, class
+  teacher, working days, marked, not marked), each day's mark (S weekend, H holiday, · not marked) and a row
+  per student with cells P / A / L / Lt and totals.
+
 ## Project structure
 
 ```
