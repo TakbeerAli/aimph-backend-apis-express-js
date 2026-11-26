@@ -39,6 +39,8 @@ export interface SettingsAttrs extends SyncFields {
   logoData: string | null;
   logoUpdatedAt: Date | null;
   certificate: CertificateSettings;
+  /** School calendar: the days off every week (0 = Sunday … 6 = Saturday). */
+  calendar: { weeklyOffDays: number[] };
   /**
    * certificates: one sequence per type and calendar year, e.g. { "SLC-2026": 23 }.
    * Only ever increased with an atomic $inc inside the issue transaction.
@@ -74,6 +76,12 @@ const settingsSchema = new Schema<SettingsAttrs>(
       stampUrl: { type: String, default: null },
       printSignature: { type: Boolean, default: true },
       version: { type: Number, default: 1, min: 1 },
+    },
+    calendar: {
+      weeklyOffDays: {
+        type: [{ type: Number, min: 0, max: 6 }],
+        default: [0],
+      },
     },
     // Changed only through atomic $inc updates, never through save().
     counters: {

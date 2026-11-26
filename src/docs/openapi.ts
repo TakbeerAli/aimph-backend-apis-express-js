@@ -1,3 +1,10 @@
+import {
+  calendarMonthQuery,
+  createEventBody,
+  deleteEventQuery,
+  updateEventBody,
+  weeklyOffBody,
+} from '../modules/calendar/calendar.schemas.js';
 import { z } from 'zod';
 import { changePasswordBody, loginBody, refreshBody } from '../modules/auth/auth.schemas.js';
 import {
@@ -227,6 +234,51 @@ const routes: Route[] = [
     'Make a later session current; closes the old one',
     'admin',
   ),
+
+  r(
+    'get',
+    '/calendar',
+    'Calendar',
+    'A month: each day WORKING / WEEKEND / HOLIDAY, working-day count',
+    'any',
+    {
+      query: calendarMonthQuery,
+    },
+  ),
+  r(
+    'post',
+    '/calendar/events',
+    'Calendar',
+    'Add a holiday or make-up working day (current session)',
+    'admin',
+    {
+      body: createEventBody,
+    },
+  ),
+  r(
+    'patch',
+    '/calendar/events/{id}',
+    'Calendar',
+    'Rename or move a holiday / working day',
+    'admin',
+    {
+      body: updateEventBody,
+    },
+  ),
+  r(
+    'delete',
+    '/calendar/events/{id}',
+    'Calendar',
+    'Delete (ATTENDANCE_EXISTS warning unless confirm=true)',
+    'admin',
+    {
+      query: deleteEventQuery,
+    },
+  ),
+  r('get', '/settings/calendar', 'Calendar', 'Weekly off days', 'any'),
+  r('patch', '/settings/calendar', 'Calendar', 'Set the weekly off days', 'admin', {
+    body: weeklyOffBody,
+  }),
 
   r('get', '/classes', 'Classes', 'Classes with sections and active student counts', 'any'),
   r('post', '/classes', 'Classes', 'Create a class', 'admin', { body: createClassBody }),

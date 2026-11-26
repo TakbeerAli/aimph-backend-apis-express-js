@@ -141,6 +141,7 @@ const PULLED = [
   'settings',
   'users',
   'certificates',
+  'calendar_events',
 ] as const;
 type PulledCollection = (typeof PULLED)[number];
 
@@ -219,6 +220,8 @@ function sources(user: AuthUser): {
     },
     // Certificates live only on the Admin phone; teachers' phones never receive them.
     { name: 'certificates', filter: {} },
+    // Holidays and make-up days, including deleted ones (isDeleted) so phones remove them.
+    { name: 'calendar_events', filter: {} },
   ];
   return user.role === 'ADMIN' ? all : all.filter((source) => source.name !== 'certificates');
 }

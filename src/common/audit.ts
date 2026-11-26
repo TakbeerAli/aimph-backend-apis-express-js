@@ -40,7 +40,11 @@ export type AuditAction =
   | 'CERT_REPRINT'
   | 'CERT_SETTINGS_UPDATE'
   | 'CERT_SIGNATURE_CHANGE'
-  | 'CERT_STAMP_CHANGE';
+  | 'CERT_STAMP_CHANGE'
+  | 'CALENDAR_EVENT_CREATE'
+  | 'CALENDAR_EVENT_UPDATE'
+  | 'CALENDAR_EVENT_DELETE'
+  | 'WEEKLY_OFF_UPDATE';
 
 export interface AuditEntry {
   action: AuditAction;

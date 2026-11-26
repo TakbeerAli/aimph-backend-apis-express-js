@@ -187,6 +187,18 @@ stores data only; the Admin phone renders and prints the PDF.
   (STAFF → TEACHER, assigned classes → their active sections, section on old payments). **Run it right after
   deploying**: payments now require `sectionIdAtPayment`.
 
+## School calendar (Attendance module, stage B2)
+
+- Weekly off days in `settings.calendar.weeklyOffDays` (0 = Sunday … 6 = Saturday, default Sunday):
+  `GET/PATCH /settings/calendar`.
+- `calendar_events`: HOLIDAY (one day or a range) and WORKING_DAY (a weekly off day worked as a make-up day),
+  only inside the current session. Deleting keeps the event with `isDeleted: true` so phones sync the deletion.
+- A date is a working day unless it is inside a holiday, or a weekly off day that is not a make-up day (a holiday
+  always wins). The rules are pure functions in `modules/calendar/calendar.rules.ts` (shared with the app).
+- Adding, moving or deleting a holiday over days that already have attendance returns `409 ATTENDANCE_EXISTS`
+  with the dates; send `confirm=true` to go ahead (the attendance records are kept).
+- `GET /calendar?month=YYYY-MM` returns each day's type and the month's working-day count.
+
 ## Project structure
 
 ```

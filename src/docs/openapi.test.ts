@@ -16,8 +16,8 @@ describe('API docs', () => {
       0,
     );
     // 58 from Section 7, plus 4 for Admin set-up (logo get/put/delete, setup status),
-    // certificates, DELETE section, and /teachers (create/update moved from /users).
-    expect(operations).toBe(77);
+    // certificates, DELETE section, /teachers (create/update moved from /users), calendar.
+    expect(operations).toBe(83);
     // Request schemas come from the Zod schemas used for validation.
     const login = res.body.paths['/auth/login'].post;
     expect(login.requestBody.content['application/json'].schema.required).toEqual([
